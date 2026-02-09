@@ -171,19 +171,22 @@ def initialize_session_state():
 
 
 def load_glossary():
-    """Load glossary from Excel file with automatic refresh on changes"""
-    # Check if we need to reload (first load, cache expired, or external changes)
+    """Load glossary from Excel file with in-memory caching via session_state"""
+    import time as _time
+
+    # Initialize load timestamp if not set
+    if 'glossary_loaded_at' not in st.session_state:
+        st.session_state.glossary_loaded_at = 0
+
+    # Only reload if: first load, or cache expired (every 5 minutes), or manually triggered
     needs_reload = False
 
     if not st.session_state.glossary_loaded:
         needs_reload = True
     else:
-        # Check if cache is still valid and term count matches
-        stats = fetch_glossary.get_glossary_stats()
-        if not stats.get('cache_valid', False):
-            needs_reload = True
-        elif stats.get('term_count', 0) != len(st.session_state.glossary):
-            # Term count changed (external edit detected)
+        # Check if in-memory cache expired (use CACHE_TTL_MINUTES from env)
+        cache_ttl = int(os.environ.get('CACHE_TTL_MINUTES', '5')) * 60
+        if _time.time() - st.session_state.glossary_loaded_at > cache_ttl:
             needs_reload = True
 
     if needs_reload:
@@ -191,6 +194,7 @@ def load_glossary():
             try:
                 st.session_state.glossary = fetch_glossary.fetch_glossary(force_refresh=True)
                 st.session_state.glossary_loaded = True
+                st.session_state.glossary_loaded_at = _time.time()
                 return True
             except Exception as e:
                 st.error(f"Failed to load glossary: {e}")
