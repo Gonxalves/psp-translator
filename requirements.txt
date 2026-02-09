@@ -1,0 +1,35 @@
+# Core dependencies
+python-dotenv>=1.0.0
+streamlit>=1.30.0
+
+# AI API
+anthropic>=0.18.0
+
+# Excel file handling (OneDrive/SharePoint)
+openpyxl>=3.1.2
+
+# Web scraping
+beautifulsoup4>=4.12.0
+selenium>=4.15.0
+requests>=2.31.0
+
+# Data processing
+pandas>=2.1.0
+
+# Word document handling
+python-docx>=1.1.0
+
+# Clipboard and utilities
+pyperclip>=1.8.2
+
+# HTML to Markdown conversion for rich text paste
+markdownify>=0.11.6
+
+# Clipboard support (Windows)
+pywin32>=305
+
+# Caching
+diskcache>=5.6.3
+
+# Streamlit extensions (optional - not required)
+# streamlit-quill>=0.1.0  # Not available - using manual text input instead

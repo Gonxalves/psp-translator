@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .clickable-container {
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 12pt;
+        line-height: 1.6;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        min-height: 100px;
+        height: 100%;
+        overflow-y: auto;
+        box-sizing: border-box;
+        position: relative;
+        user-select: none;
+    }
+
+    .clickable-word {
+        cursor: pointer;
+        padding: 1px 2px;
+        border-radius: 2px;
+        transition: background-color 0.15s ease;
+    }
+
+    .clickable-word:hover {
+        background-color: #e3f2fd;
+    }
+
+    .clickable-word.selected {
+        background-color: #bbdefb;
+        box-shadow: 0 0 0 1px #2196f3;
+    }
+
+    .clickable-word.synced {
+        background-color: #c8e6c9;
+        box-shadow: 0 0 0 1px #4caf50;
+    }
+
+    .context-menu {
+        position: fixed;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        display: none;
+        min-width: 160px;
+        overflow: hidden;
+    }
+
+    .context-menu-header {
+        padding: 8px 12px;
+        background: #f5f5f5;
+        border-bottom: 1px solid #eee;
+        font-size: 12px;
+        color: #333;
+        font-weight: 600;
+    }
+
+    .menu-item {
+        padding: 10px 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #333;
+        transition: background-color 0.1s ease;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .menu-item:last-child {
+        border-bottom: none;
+    }
+
+    .menu-item:hover {
+        background-color: #f0f7ff;
+    }
+
+    .menu-item:active {
+        background-color: #e3f2fd;
+    }
+
+    .menu-item-icon {
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #e8e8e8;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    /* Inline editor styles */
+    .inline-editor {
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 12pt;
+        padding: 2px 6px;
+        border: 2px solid #2196f3;
+        border-radius: 4px;
+        outline: none;
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+        min-width: 50px;
+        line-height: 1.4;
+    }
+
+    .inline-editor:focus {
+        border-color: #1565c0;
+        box-shadow: 0 2px 12px rgba(21, 101, 192, 0.4);
+    }
+
+    .edit-hint {
+        position: fixed;
+        background: #333;
+        color: #fff;
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        z-index: 10001;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .edit-hint.visible {
+        opacity: 1;
+    }
+</style>
+</head>
+<body>
+    <div id="container" class="clickable-container"></div>
+
+    <div id="context-menu" class="context-menu">
+        <div class="context-menu-header" id="menu-header">Selected: </div>
+        <div class="menu-item" data-action="termium">
+            <span class="menu-item-icon">T</span>
+            TERMIUM Plus
+        </div>
+        <div class="menu-item" data-action="oqlf">
+            <span class="menu-item-icon">Q</span>
+            OQLF
+        </div>
+        <div class="menu-item" data-action="canada">
+            <span class="menu-item-icon">C</span>
+            Canada.ca
+        </div>
+    </div>
+
+    <div id="edit-hint" class="edit-hint">Enter: confirm &middot; Esc: cancel</div>
+
+    <script>
+        // ---- Streamlit Component Communication Protocol ----
+        function sendToStreamlit(type, data) {
+            window.parent.postMessage(
+                Object.assign({ isStreamlitMessage: true, type: type }, data),
+                "*"
+            );
+        }
+
+        function onReady() {
+            sendToStreamlit("streamlit:componentReady", { apiVersion: 1 });
+        }
+
+        function setFrameHeight(height) {
+            sendToStreamlit("streamlit:setFrameHeight", { height: height });
+        }
+
+        function setComponentValue(value) {
+            sendToStreamlit("streamlit:setComponentValue", { value: value });
+        }
+
+        // ---- Component State ----
+        const container = document.getElementById('container');
+        const contextMenu = document.getElementById('context-menu');
+        const menuHeader = document.getElementById('menu-header');
+        const editHint = document.getElementById('edit-hint');
+
+        let selectedIndices = [];
+        let lastClickedIndex = null;
+        let isEditable = false;
+        let activeEditor = null; // tracks current inline editor
+
+        // ---- Word Wrapping ----
+        function wrapWords(html) {
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            let wordIndex = 0;
+
+            function processNode(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.textContent;
+                    if (!text.trim()) return node;
+
+                    const parts = text.split(/(\s+)/);
+                    const fragment = document.createDocumentFragment();
+
+                    // Punctuation-only tokens should not be clickable
+                    const punctuationOnly = /^[.,;:!?\u2026\u2014\u2013\-\u2019\u201C\u201D\u00AB\u00BB()\[\]{}"'\/\\]+$/;
+
+                    parts.forEach(function(part) {
+                        if (/^\s+$/.test(part)) {
+                            fragment.appendChild(document.createTextNode(part));
+                        } else if (part.length > 0) {
+                            if (punctuationOnly.test(part)) {
+                                // Render punctuation as plain text (not clickable)
+                                fragment.appendChild(document.createTextNode(part));
+                            } else {
+                                const span = document.createElement('span');
+                                span.className = 'clickable-word';
+                                span.dataset.wordIndex = wordIndex;
+                                span.textContent = part;
+                                fragment.appendChild(span);
+                                wordIndex++;
+                            }
+                        }
+                    });
+
+                    return fragment;
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    const children = Array.from(node.childNodes);
+                    children.forEach(function(child) {
+                        const processed = processNode(child);
+                        if (processed !== child) {
+                            node.replaceChild(processed, child);
+                        }
+                    });
+                    return node;
+                }
+                return node;
+            }
+
+            processNode(temp);
+            return temp.innerHTML;
+        }
+
+        // ---- Selection Functions ----
+        function getAllWords() {
+            return container.querySelectorAll('.clickable-word');
+        }
+
+        function clearSelection() {
+            getAllWords().forEach(function(word) { word.classList.remove('selected'); });
+            selectedIndices = [];
+        }
+
+        function selectWord(index) {
+            const words = getAllWords();
+            if (index >= 0 && index < words.length) {
+                words[index].classList.add('selected');
+                if (!selectedIndices.includes(index)) {
+                    selectedIndices.push(index);
+                    selectedIndices.sort(function(a, b) { return a - b; });
+                }
+            }
+        }
+
+        function selectRange(start, end) {
+            const minIdx = Math.min(start, end);
+            const maxIdx = Math.max(start, end);
+            for (let i = minIdx; i <= maxIdx; i++) {
+                selectWord(i);
+            }
+        }
+
+        function getSelectedText() {
+            const words = getAllWords();
+            // Strip leading/trailing punctuation from each word so tools get clean terms
+            return selectedIndices.map(function(i) {
+                return words[i].textContent.replace(/^[.,;:!?\u2026\u2014\u2013\u2019\u201C\u201D\u00AB\u00BB()\[\]{}"'\/\\]+/, '')
+                                           .replace(/[.,;:!?\u2026\u2014\u2013\u2019\u201C\u201D\u00AB\u00BB()\[\]{}"'\/\\]+$/, '');
+            }).filter(function(w) { return w.length > 0; }).join(' ');
+        }
+
+        // ---- Context Menu ----
+        function showContextMenu(x, y) {
+            const selectedText = getSelectedText();
+            menuHeader.textContent = selectedText.length > 30
+                ? selectedText.substring(0, 30) + '...'
+                : selectedText;
+
+            contextMenu.style.display = 'block';
+
+            const menuRect = contextMenu.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            let left = x;
+            let top = y;
+
+            if (x + menuRect.width > viewportWidth) {
+                left = viewportWidth - menuRect.width - 10;
+            }
+            if (y + menuRect.height > viewportHeight) {
+                top = y - menuRect.height;
+            }
+            if (left < 0) left = 10;
+            if (top < 0) top = 10;
+
+            contextMenu.style.left = left + 'px';
+            contextMenu.style.top = top + 'px';
+        }
+
+        function hideContextMenu() {
+            contextMenu.style.display = 'none';
+        }
+
+        // ---- Trigger Action: Send value back to Streamlit ----
+        function triggerAction(action) {
+            const selectedText = getSelectedText();
+            const indices = selectedIndices.join(',');
+            hideContextMenu();
+            setComponentValue({
+                term: selectedText,
+                tool: action,
+                indices: indices,
+                ts: Date.now()
+            });
+        }
+
+        // ---- Inline Editing (editable mode) ----
+        function startInlineEdit(wordSpans, startIndex) {
+            if (activeEditor) cancelInlineEdit();
+
+            const words = getAllWords();
+            // Collect the text of all spans being edited
+            const oldText = Array.from(wordSpans).map(function(s) {
+                return s.textContent;
+            }).join(' ');
+
+            // Get position of first span for placing the editor
+            const firstSpan = wordSpans[0];
+            const rect = firstSpan.getBoundingClientRect();
+
+            // Hide the original spans
+            wordSpans.forEach(function(s) { s.style.display = 'none'; });
+
+            // Create inline input
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.value = oldText;
+            input.className = 'inline-editor';
+            // Auto-size based on content
+            input.style.width = Math.max(oldText.length * 9 + 20, 60) + 'px';
+
+            // Insert after the first hidden span
+            firstSpan.parentNode.insertBefore(input, firstSpan.nextSibling);
+            input.focus();
+            input.select();
+
+            // Show hint
+            var hintRect = input.getBoundingClientRect();
+            editHint.style.left = hintRect.left + 'px';
+            editHint.style.top = (hintRect.bottom + 4) + 'px';
+            editHint.classList.add('visible');
+
+            // Auto-resize input as user types
+            input.addEventListener('input', function() {
+                input.style.width = Math.max(input.value.length * 9 + 20, 60) + 'px';
+            });
+
+            var committed = false;
+
+            function commitEdit() {
+                if (committed) return;
+                committed = true;
+                var newText = input.value.trim();
+                editHint.classList.remove('visible');
+
+                if (newText && newText !== oldText) {
+                    // Send edit back to Streamlit
+                    setComponentValue({
+                        action: 'edit',
+                        oldText: oldText,
+                        newText: newText,
+                        wordIndex: startIndex,
+                        ts: Date.now()
+                    });
+                }
+
+                // Restore spans with new text (visual feedback before Streamlit reruns)
+                if (newText && newText !== oldText) {
+                    // Replace first span's text with new text, remove others
+                    firstSpan.textContent = newText;
+                    firstSpan.style.display = '';
+                    firstSpan.style.backgroundColor = '#C8E6C9';
+                    firstSpan.style.boxShadow = '0 0 0 2px #2E7D32';
+                    firstSpan.style.fontWeight = 'bold';
+                    for (var k = 1; k < wordSpans.length; k++) {
+                        wordSpans[k].style.display = 'none';
+                    }
+                } else {
+                    // No change - restore all spans
+                    wordSpans.forEach(function(s) { s.style.display = ''; });
+                }
+
+                if (input.parentNode) input.parentNode.removeChild(input);
+                activeEditor = null;
+            }
+
+            function cancelEdit() {
+                committed = true;
+                editHint.classList.remove('visible');
+                wordSpans.forEach(function(s) { s.style.display = ''; });
+                if (input.parentNode) input.parentNode.removeChild(input);
+                activeEditor = null;
+            }
+
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    commitEdit();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    cancelEdit();
+                }
+            });
+
+            input.addEventListener('blur', function() {
+                // Small delay to allow click events to fire first
+                setTimeout(function() {
+                    if (!committed) commitEdit();
+                }, 150);
+            });
+
+            activeEditor = { input: input, spans: wordSpans, cancel: cancelEdit };
+        }
+
+        function cancelInlineEdit() {
+            if (activeEditor) {
+                activeEditor.cancel();
+                activeEditor = null;
+            }
+        }
+
+        // ---- Event Handlers ----
+        container.addEventListener('click', function(e) {
+            // Don't interfere with active editor
+            if (activeEditor && activeEditor.input === e.target) return;
+
+            var wordSpan = e.target.closest('.clickable-word');
+            if (!wordSpan) {
+                clearSelection();
+                hideContextMenu();
+                return;
+            }
+
+            var wordIndex = parseInt(wordSpan.dataset.wordIndex);
+
+            if (e.shiftKey && lastClickedIndex !== null) {
+                // Shift+click: select range
+                selectRange(lastClickedIndex, wordIndex);
+            } else if (e.ctrlKey || e.metaKey) {
+                // Ctrl/Cmd+click: toggle individual word
+                if (selectedIndices.includes(wordIndex)) {
+                    wordSpan.classList.remove('selected');
+                    selectedIndices = selectedIndices.filter(function(i) { return i !== wordIndex; });
+                } else {
+                    selectWord(wordIndex);
+                }
+            } else {
+                // Normal click: select single word
+                clearSelection();
+                selectWord(wordIndex);
+            }
+
+            lastClickedIndex = wordIndex;
+
+            // Show context menu only in non-editable mode
+            if (!isEditable && selectedIndices.length > 0) {
+                showContextMenu(e.clientX + 5, e.clientY + 5);
+            }
+        });
+
+        // Double-click handler for inline editing (editable mode only)
+        container.addEventListener('dblclick', function(e) {
+            if (!isEditable) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            hideContextMenu();
+
+            var wordSpan = e.target.closest('.clickable-word');
+            if (!wordSpan) return;
+
+            var clickedIndex = parseInt(wordSpan.dataset.wordIndex);
+
+            // If we have a multi-word selection that includes this word, edit the whole selection
+            if (selectedIndices.length > 1 && selectedIndices.includes(clickedIndex)) {
+                var words = getAllWords();
+                var spans = selectedIndices.map(function(i) { return words[i]; });
+                startInlineEdit(spans, selectedIndices[0]);
+            } else {
+                // Edit just this single word
+                clearSelection();
+                startInlineEdit([wordSpan], clickedIndex);
+            }
+        });
+
+        // Menu item click handler
+        contextMenu.querySelectorAll('.menu-item').forEach(function(item) {
+            item.addEventListener('click', function(e) {
+                e.stopPropagation();
+                triggerAction(item.dataset.action);
+            });
+        });
+
+        // Close menu on outside click
+        document.addEventListener('click', function(e) {
+            if (!contextMenu.contains(e.target) && !e.target.closest('.clickable-word')) {
+                hideContextMenu();
+            }
+        });
+
+        // Close menu / cancel edit on escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                if (activeEditor) {
+                    cancelInlineEdit();
+                } else {
+                    hideContextMenu();
+                    clearSelection();
+                }
+            }
+        });
+
+        // ---- Render on Streamlit message ----
+        function renderComponent(args) {
+            var htmlContent = args.html_content || '';
+            var highlightIndices = args.highlight_indices || [];
+            isEditable = args.editable || false;
+
+            // Reset state
+            selectedIndices = [];
+            lastClickedIndex = null;
+            if (activeEditor) cancelInlineEdit();
+
+            // Render wrapped content
+            container.innerHTML = wrapWords(htmlContent);
+
+            // Apply initial highlights (persisted from previous action)
+            if (highlightIndices.length > 0) {
+                var words = getAllWords();
+                highlightIndices.forEach(function(idx) {
+                    if (idx < words.length) {
+                        words[idx].classList.add('selected');
+                        if (!selectedIndices.includes(idx)) {
+                            selectedIndices.push(idx);
+                        }
+                    }
+                });
+                selectedIndices.sort(function(a, b) { return a - b; });
+            }
+
+            // Apply synced highlights for editable mode
+            if (isEditable && args.synced_indices && args.synced_indices.length > 0) {
+                var allW = getAllWords();
+                args.synced_indices.forEach(function(idx) {
+                    if (idx < allW.length) {
+                        allW[idx].classList.add('synced');
+                    }
+                });
+            }
+        }
+
+        window.addEventListener("message", function(event) {
+            if (event.data && event.data.type === "streamlit:render") {
+                renderComponent(event.data.args);
+            }
+        });
+
+        // ---- Initialize ----
+        onReady();
+    </script>
+</body>
+</html>
