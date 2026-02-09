@@ -44,9 +44,23 @@ class ExcelClient:
         Check if file is locked by Excel or another process.
 
         Excel creates a lock file named ~$filename.xlsx when open.
-        Also attempts to open the file to check for OS-level locks.
+        On Linux servers, skip the lock file check since no Excel is running locally
+        (lock files may be synced from OneDrive and are not relevant).
         """
-        # Check for Excel lock file
+        import sys
+
+        # On Linux, only check for OS-level locks (not Excel lock files)
+        if sys.platform != 'win32':
+            if file_path.exists():
+                try:
+                    with open(file_path, 'r+b'):
+                        pass
+                    return False
+                except PermissionError:
+                    return True
+            return False
+
+        # Windows: check for Excel lock file
         lock_file = file_path.parent / f"~${file_path.name}"
         if lock_file.exists():
             return True
