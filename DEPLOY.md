@@ -1,38 +1,67 @@
-# Deployment Guide — PSP Translator
+# Deployment Guide — PSP Translator (HTTPS)
 
-Run the PSP Translator 24/7 on a VPS with Docker and OneDrive sync.
-Access from any device at `http://YOUR_SERVER_IP:8501`.
+Run the PSP Translator 24/7 on a VPS with Docker, nginx reverse proxy, and automatic Let's Encrypt SSL.
+Access from any device at `https://YOUR_DOMAIN`.
 
 ---
 
-## Step 1: Connect to your VPS
+## Prerequisites
 
-Open PowerShell on your PC:
+- A VPS (Ubuntu 22.04+ recommended, 2+ GB RAM)
+- A registered domain name
+- SSH access to the VPS as root
+
+---
+
+## Step 1: DNS Setup
+
+Go to your domain registrar (or DNS provider) and create an **A record**:
+
+| Type | Name | Value |
+|------|------|-------|
+| A | translate (or @) | YOUR_VPS_IP |
+
+Wait 5–30 minutes for propagation. Verify:
 ```bash
-ssh root@YOUR_SERVER_IP
+dig translate.yourdomain.com
+```
+The answer should show your VPS IP address.
+
+---
+
+## Step 2: Connect to your VPS
+
+```bash
+ssh root@YOUR_VPS_IP
 ```
 
 ---
 
-## Step 2: Install Docker and firewall
+## Step 3: Install Docker and firewall
 
 ```bash
 apt update && apt upgrade -y
-apt install -y curl git ufw
+apt install -y curl git ufw apache2-utils
 
+# Install Docker
 curl -fsSL https://get.docker.com | sh
 systemctl enable docker
 
+# Firewall: allow SSH, HTTP (for Let's Encrypt), HTTPS
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp
-ufw allow 8501/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
 ufw enable
 ```
 
+> **Note:** Port 8501 is NOT opened — the app is only accessible through nginx on port 443.
+> `apache2-utils` provides `htpasswd` for creating basic auth credentials.
+
 ---
 
-## Step 3: Create data directory
+## Step 4: Create data directory
 
 ```bash
 mkdir -p /opt/psp-data
@@ -40,7 +69,7 @@ mkdir -p /opt/psp-data
 
 ---
 
-## Step 4: Set up OneDrive sync (rclone)
+## Step 5: Set up OneDrive sync (rclone)
 
 ### Install rclone
 ```bash
@@ -106,7 +135,7 @@ Replace `PATH/TO/FOLDER` with your actual OneDrive path in both places.
 
 ---
 
-## Step 5: Get the code on the server
+## Step 6: Get the code on the server
 
 ```bash
 git clone YOUR_REPO_URL /opt/psp-translator
@@ -115,13 +144,13 @@ cd /opt/psp-translator
 
 ---
 
-## Step 6: Create the .env file
+## Step 7: Create the .env file
 
 ```bash
 nano /opt/psp-translator/.env
 ```
 
-Paste this:
+Paste this (fill in your real values):
 ```
 ANTHROPIC_API_KEY=sk-ant-your-real-key-here
 EXCEL_GLOSSARY_PATH=/app/data/Glossary.xlsx
@@ -138,52 +167,143 @@ chmod 600 /opt/psp-translator/.env
 
 ---
 
-## Step 7: Launch
+## Step 8: Configure your domain in nginx
+
+Replace `YOUR_DOMAIN` in `nginx.conf` with your actual domain:
+
+```bash
+cd /opt/psp-translator
+sed -i 's/YOUR_DOMAIN/translate.yourdomain.com/g' nginx.conf
+```
+
+Replace `translate.yourdomain.com` with your actual domain.
+
+---
+
+## Step 9: Create basic auth credentials
+
+nginx basic auth is the first layer of protection (before the app's own password screen):
+
+```bash
+cd /opt/psp-translator
+htpasswd -c .htpasswd psp-user
+```
+
+Enter a password when prompted. To add more users later:
+```bash
+htpasswd .htpasswd another-user
+```
+
+---
+
+## Step 10: Bootstrap SSL certificate
+
+Edit the init script with your domain and email:
+
+```bash
+nano init-letsencrypt.sh
+```
+
+Change the two lines at the top:
+```bash
+domains=(translate.yourdomain.com)     # Your actual domain
+email="your-email@example.com"         # Your email for expiry notices
+staging=1                              # Keep 1 for the first test
+```
+
+Run it:
+```bash
+chmod +x init-letsencrypt.sh
+./init-letsencrypt.sh
+```
+
+If it succeeds with staging, change `staging=0` and run again for a real certificate:
+```bash
+nano init-letsencrypt.sh   # Change staging=1 to staging=0
+./init-letsencrypt.sh
+```
+
+> **Why staging first?** Let's Encrypt limits you to 5 real certificates per week.
+> Staging certificates work the same way but don't count toward the limit.
+
+---
+
+## Step 11: Launch everything
 
 ```bash
 cd /opt/psp-translator
 docker compose up -d --build
 ```
 
-Wait 2-3 minutes for the build. Check status:
+Wait 2–3 minutes for the build. Check status:
 ```bash
 docker compose ps
 ```
 
+You should see 3 services running: `psp-translator`, `psp-nginx`, `psp-certbot`.
+
 ---
 
-## Step 8: Use it
+## Step 12: Verify
 
-Open `http://YOUR_SERVER_IP:8501` in any browser (phone, laptop, tablet).
-Enter the password you set in `.env`.
+1. Open `https://translate.yourdomain.com` in a browser
+2. Confirm the HTTPS lock icon appears (no certificate warnings)
+3. Enter basic auth credentials (from Step 9)
+4. Enter the app password (from Step 7)
+5. Test: translate a text, look up a term, add a glossary entry, download a Word file
+6. Open a second browser/incognito — confirm both sessions work independently
 
-Test:
-1. Translate a text (Claude API)
-2. Look up a term on TERMIUM/OQLF/Canada.ca (Selenium)
-3. Add a glossary term (Excel write)
-4. Download Word (docx export)
+Check from the command line:
+```bash
+docker compose ps                                    # All 3 services "Up"
+docker compose logs certbot                          # Renewal timer running
+curl -I https://translate.yourdomain.com 2>/dev/null | head -20  # Check headers
+```
 
 ---
 
 ## Maintenance
 
+### View logs
 ```bash
-# View logs
-docker compose logs -f app
+docker compose logs -f app      # App logs
+docker compose logs -f nginx    # Nginx access/error logs
+docker compose logs certbot     # Certificate renewal logs
+```
 
-# Restart
-docker compose restart app
-
-# Update after code changes
+### Update after code changes
+```bash
 cd /opt/psp-translator && git pull && docker compose up -d --build
+```
 
-# Check OneDrive sync logs
+### Restart
+```bash
+docker compose restart
+```
+
+### Force certificate renewal
+```bash
+docker compose run --rm certbot renew --force-renewal
+docker compose exec nginx nginx -s reload
+```
+
+### Check certificate expiry
+```bash
+docker compose run --rm certbot certificates
+```
+
+### Check OneDrive sync logs
+```bash
 tail -20 /var/log/psp-sync.log
+```
 
-# Check disk space
+### Check disk space
+```bash
 df -h && docker system df
+```
 
-# Clean up Docker if disk fills
+### Clean up Docker if disk fills
+```bash
 docker system prune -f
 ```
 
@@ -191,9 +311,23 @@ docker system prune -f
 
 ## Troubleshooting
 
-### App won't start
+### 502 Bad Gateway
+The Streamlit app hasn't finished starting. Wait 30 seconds and retry.
 ```bash
 docker compose logs app
+```
+
+### Certificate renewal fails
+Ensure port 80 is open and the ACME challenge path works:
+```bash
+curl http://translate.yourdomain.com/.well-known/acme-challenge/test
+```
+Should return 404 (not "connection refused").
+
+### Basic auth not working
+Check the `.htpasswd` file exists:
+```bash
+ls -la /opt/psp-translator/.htpasswd
 ```
 
 ### Scraping fails
@@ -204,5 +338,11 @@ docker compose exec app chromium --version
 ### Out of memory
 ```bash
 free -h
-docker compose restart app
+docker compose restart
+```
+
+### WebSocket errors in browser console
+Check nginx logs:
+```bash
+docker compose logs nginx | grep upgrade
 ```

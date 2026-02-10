@@ -8,6 +8,12 @@ token.json
 # Temporary files
 .tmp/
 
+# SSL certificates (generated on server)
+data/
+
+# nginx basic auth credentials
+.htpasswd
+
 # Python
 __pycache__/
 *.py[cod]
