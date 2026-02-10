@@ -8,6 +8,9 @@ services:
     container_name: psp-translator
     restart: unless-stopped
     shm_size: "2g"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "8501:8501"
     env_file:
