@@ -10,9 +10,9 @@ set -e
 # ============================================
 # CONFIGURATION - Edit these values
 # ============================================
-domains=(your-domain.com)          # Your domain (e.g. translate.psp.ca)
+domains=(insprize.com)
 email="your-email@example.com"     # Email for Let's Encrypt expiry notices
-staging=0                          # Set to 1 to test with staging first (recommended)
+staging=1                          # Set to 1 to test with staging first (recommended)
 data_path="./data/certbot"
 
 # ============================================
