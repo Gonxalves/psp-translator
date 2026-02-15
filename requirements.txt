@@ -8,6 +8,9 @@ anthropic>=0.18.0
 # Excel file handling (OneDrive/SharePoint)
 openpyxl>=3.1.2
 
+# Microsoft Graph API authentication (SharePoint sync)
+msal>=1.28.0
+
 # Web scraping
 beautifulsoup4>=4.12.0
 selenium>=4.15.0

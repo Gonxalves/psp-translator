@@ -93,6 +93,12 @@ def add(
             values=row_data
         )
 
+        # Upload updated file back to SharePoint (if configured)
+        from tools.sharepoint_client import is_sharepoint_enabled, upload_glossary
+        if is_sharepoint_enabled():
+            print("Syncing glossary back to SharePoint...")
+            upload_glossary(str(glossary_path))
+
         # Invalidate cache to force refresh
         invalidate_cache()
 
@@ -168,6 +174,11 @@ def update(
             updates.append({'row': row_index, 'col': 3, 'value': new_notes})  # Column C (Notes)
 
         client.batch_update(glossary_path, GLOSSARY_SHEET_NAME, updates)
+
+        # Upload updated file back to SharePoint (if configured)
+        from tools.sharepoint_client import is_sharepoint_enabled, upload_glossary
+        if is_sharepoint_enabled():
+            upload_glossary(str(glossary_path))
 
         # Invalidate cache
         invalidate_cache()
