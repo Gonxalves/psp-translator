@@ -7,6 +7,8 @@ Replaces Streamlit with Flask + HTMX for environments that block WebSocket
 
 import os
 import re
+import json
+import base64
 import html as html_module
 from io import BytesIO
 from pathlib import Path
@@ -26,6 +28,51 @@ from tools import word_alignment
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'psp-translator-secret-key-2024')
+
+# ---------------------------------------------------------------------------
+# Server-side session data (avoids cookie size limit of 4KB)
+# ---------------------------------------------------------------------------
+SESSION_DATA_DIR = Path('.tmp/session_data')
+SESSION_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _get_sid():
+    """Get or create a session ID for server-side storage."""
+    sid = session.get('_sid')
+    if not sid:
+        sid = os.urandom(16).hex()
+        session['_sid'] = sid
+    return sid
+
+
+def store_data(**kwargs):
+    """Store large data server-side (not in cookie)."""
+    sid = _get_sid()
+    filepath = SESSION_DATA_DIR / f"{sid}.json"
+    existing = {}
+    if filepath.exists():
+        try:
+            existing = json.loads(filepath.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    existing.update(kwargs)
+    filepath.write_text(json.dumps(existing, ensure_ascii=False), encoding='utf-8')
+
+
+def get_data(key, default=None):
+    """Retrieve server-side session data."""
+    sid = session.get('_sid')
+    if not sid:
+        return default
+    filepath = SESSION_DATA_DIR / f"{sid}.json"
+    if not filepath.exists():
+        return default
+    try:
+        data = json.loads(filepath.read_text(encoding='utf-8'))
+        return data.get(key, default)
+    except Exception:
+        return default
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -98,15 +145,14 @@ def translate_page():
         stats = {'term_count': 0}
 
     # Load logo as base64
-    import base64
-    import json
     logo_b64 = ''
     logo_path = Path('assets/psp_logo.png')
     if logo_path.exists():
         logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
 
-    french_text = session.get('french_text', '')
-    translated_text = session.get('translated_text', '')
+    french_text = get_data('french_text', '')
+    translated_text = get_data('translated_text', '')
+    alignment_data = get_data('alignment')
 
     return render_template('translator.html',
         glossary_count=len(glossary),
@@ -116,7 +162,7 @@ def translate_page():
         translated_text=translated_text,
         french_html=markdown_to_html(french_text) if french_text else '',
         translated_html=markdown_to_html(translated_text) if translated_text else '',
-        alignment_json=json.dumps(session.get('alignment')) if session.get('alignment') else 'null',
+        alignment_json=json.dumps(alignment_data) if alignment_data else 'null',
     )
 
 
@@ -137,9 +183,8 @@ def api_translate():
             rules_path="config/translation_rules.md"
         )
 
-        # Store in session
-        session['french_text'] = french_text
-        session['translated_text'] = result['translated_text']
+        # Store server-side (not in cookie)
+        store_data(french_text=french_text, translated_text=result['translated_text'])
 
         # Generate word alignment
         alignment_data = None
@@ -152,7 +197,7 @@ def api_translate():
                     'fr_to_en': {str(k): v for k, v in alignment.get('fr_to_en', {}).items()},
                     'en_to_fr': {str(k): v for k, v in alignment.get('en_to_fr', {}).items()},
                 }
-                session['alignment'] = alignment_data
+                store_data(alignment=alignment_data)
         except Exception as e:
             print(f"Warning: Word alignment failed: {e}")
 
@@ -165,7 +210,6 @@ def api_translate():
         html_output = markdown_to_html(result['translated_text'])
         french_html = markdown_to_html(french_text)
 
-        import json
         return render_template('_translation_result.html',
             html_output=html_output,
             french_html=french_html,
@@ -195,7 +239,8 @@ def api_upload():
         file_bytes.seek(0)
         doc_info = parse_word.get_document_info(file_bytes)
 
-        session['french_text'] = extracted_text
+        # Store server-side (not in cookie)
+        store_data(french_text=extracted_text)
 
         return jsonify({
             'text': extracted_text,
@@ -277,8 +322,8 @@ def api_glossary_refresh():
 @app.route('/api/download', methods=['GET'])
 @require_auth
 def api_download():
-    french_text = session.get('french_text', '')
-    translated_text = session.get('translated_text', '')
+    french_text = get_data('french_text', '')
+    translated_text = get_data('translated_text', '')
 
     if not translated_text:
         return redirect(url_for('translate_page'))
