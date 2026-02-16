@@ -392,19 +392,6 @@
                     // Highlight clicked French word
                     frWords.forEach(function(w) { w.classList.remove('highlighted'); });
                     span.classList.add('highlighted');
-
-                    // Highlight English words via alignment (if available)
-                    var enPanel = document.getElementById('english-preview');
-                    if (enPanel) {
-                        var enWords = enPanel.querySelectorAll('.editable-word');
-                        enWords.forEach(function(w) { w.classList.remove('en-highlighted'); });
-                        if (alignment && alignment.fr_to_en) {
-                            var enIndices = alignment.fr_to_en[String(idx)] || [];
-                            enIndices.forEach(function(ei) {
-                                if (enWords[ei]) enWords[ei].classList.add('en-highlighted');
-                            });
-                        }
-                    }
                 });
             });
         }
