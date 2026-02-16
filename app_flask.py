@@ -110,6 +110,77 @@ def require_auth(f):
     return decorated
 
 
+def find_english_equivalent(french_term, french_text, translated_text, alignment_data):
+    """Find the current English equivalent of a French term in the translated text.
+    Uses word alignment first (fast), then falls back to Claude AI."""
+    if not translated_text or not french_text:
+        return None
+
+    # Step 1: Try word alignment (fast, no API cost)
+    if alignment_data and alignment_data.get('fr_to_en'):
+        fr_words = alignment_data.get('fr_words', [])
+        en_words = alignment_data.get('en_words', [])
+        fr_to_en = alignment_data.get('fr_to_en', {})
+
+        search_words = french_term.lower().split()
+        if search_words:
+            for i in range(len(fr_words) - len(search_words) + 1):
+                match = all(
+                    fr_words[i + j].lower() == search_words[j]
+                    for j in range(len(search_words))
+                )
+                if match:
+                    en_indices = []
+                    for j in range(len(search_words)):
+                        en_indices.extend(fr_to_en.get(str(i + j), []))
+                    en_indices = sorted(set(en_indices))
+                    if en_indices:
+                        candidate = ' '.join(en_words[idx] for idx in en_indices if idx < len(en_words))
+                        pattern = r'(?<!\w)' + re.escape(candidate) + r'(?!\w)'
+                        if re.search(pattern, translated_text, re.IGNORECASE):
+                            return candidate
+
+    # Step 2: Use Claude AI as fallback
+    import anthropic
+    api_key = os.getenv('ANTHROPIC_API_KEY')
+    if not api_key:
+        return None
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        fr_excerpt = french_text[:3000]
+        en_excerpt = translated_text[:3000]
+
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=100,
+            temperature=0,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"In the French text below, the term \"{french_term}\" appears. "
+                    f"What is the EXACT English word or short phrase used to translate "
+                    f"this term in the English text below? "
+                    f"Reply with ONLY the English word/phrase, nothing else.\n\n"
+                    f"FRENCH TEXT:\n{fr_excerpt}\n\n"
+                    f"ENGLISH TEXT:\n{en_excerpt}"
+                )
+            }]
+        )
+
+        candidate = message.content[0].text.strip().strip('"').strip("'")
+        if candidate:
+            pattern = r'(?<!\w)' + re.escape(candidate) + r'(?!\w)'
+            m = re.search(pattern, translated_text, re.IGNORECASE)
+            if m:
+                return m.group(0)
+
+    except Exception as e:
+        print(f"[WARN] AI lookup for English equivalent failed: {e}")
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -222,6 +293,48 @@ def api_translate():
 
     except Exception as e:
         return f'<div class="alert alert-danger">Translation failed: {html_module.escape(str(e))}</div>'
+
+
+@app.route('/api/use-translation', methods=['POST'])
+@require_auth
+def api_use_translation():
+    french_term = request.form.get('french_term', '').strip()
+    new_english = request.form.get('new_english', '').strip()
+
+    if not french_term or not new_english:
+        return jsonify({'success': False, 'message': 'Missing parameters.'}), 400
+
+    translated_text = get_data('translated_text', '')
+    french_text = get_data('french_text', '')
+    alignment_data = get_data('alignment')
+
+    if not translated_text:
+        return jsonify({'success': False, 'message': 'No translation available yet.'})
+
+    # Find current English equivalent
+    old_english = find_english_equivalent(french_term, french_text, translated_text, alignment_data)
+    if not old_english:
+        return jsonify({'success': False, 'message': f"Could not find how '{french_term}' was translated."})
+
+    # Replace in translated text (word-boundary matching)
+    pattern = r'(?<!\w)' + re.escape(old_english) + r'(?!\w)'
+    new_text, count = re.subn(pattern, new_english, translated_text, flags=re.IGNORECASE)
+
+    if count == 0:
+        return jsonify({'success': False, 'message': f"'{old_english}' not found in translation."})
+
+    # Save updated translation
+    store_data(translated_text=new_text, alignment=None)
+
+    return jsonify({
+        'success': True,
+        'message': f"Replaced '{old_english}' with '{new_english}' ({count} occurrence{'s' if count > 1 else ''}).",
+        'old_english': old_english,
+        'new_english': new_english,
+        'count': count,
+        'translated_html': markdown_to_html(new_text),
+        'french_html': markdown_to_html(french_text),
+    })
 
 
 @app.route('/api/upload', methods=['POST'])

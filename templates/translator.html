@@ -101,13 +101,22 @@
         /* Search results */
         .search-result-card { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
         .search-result-header { background: #f9fafb; padding: 10px 14px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e5e7eb; }
-        .search-result-body { padding: 12px 14px; }
-        .search-result-item { border-left: 3px solid #3b82f6; padding-left: 12px; margin-bottom: 12px; }
-        .search-result-item h4 { font-size: 14px; margin-bottom: 4px; }
-        .search-result-item p { font-size: 13px; color: #4b5563; margin-bottom: 4px; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #e5e7eb; color: #374151; }
+        .search-result-body { padding: 8px 14px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #e5e7eb; color: #374151; margin-left: 8px; }
         .link { color: #3b82f6; text-decoration: none; font-size: 13px; }
         .link:hover { text-decoration: underline; }
+
+        /* Collapsible result items */
+        .search-result-body details { border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px; }
+        .search-result-body details[open] { border-color: #bfdbfe; }
+        .result-summary { padding: 10px 14px; cursor: pointer; font-size: 14px; list-style: none; display: flex; align-items: center; gap: 8px; }
+        .result-summary::-webkit-details-marker { display: none; }
+        .result-summary::before { content: '\25B6'; font-size: 10px; color: #6b7280; transition: transform 0.2s; }
+        details[open] .result-summary::before { transform: rotate(90deg); }
+        .result-summary:hover { background: #f9fafb; }
+        .result-details { padding: 8px 14px 14px 14px; border-top: 1px solid #e5e7eb; }
+        .result-details p { font-size: 13px; color: #4b5563; margin-bottom: 8px; }
+        .result-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 
         /* Glossary form */
         .glossary-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -517,6 +526,43 @@
         });
 
         // ==========================================
+        // Use this translation (replace term in English output)
+        // ==========================================
+        async function useThisTranslation(frenchTerm, newEnglish) {
+            var msgEl = document.getElementById('glossary-add-msg');
+            msgEl.innerHTML = '<div class="alert alert-info"><span class="spinner" style="vertical-align:middle;margin-right:8px;"></span> Finding and replacing "' + frenchTerm + '"...</div>';
+
+            try {
+                var formData = new FormData();
+                formData.append('french_term', frenchTerm);
+                formData.append('new_english', newEnglish);
+
+                var resp = await fetch('/api/use-translation', { method: 'POST', body: formData });
+                var data = await resp.json();
+
+                if (data.success) {
+                    msgEl.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+                    // Update the English preview with new translation
+                    var enPreview = document.getElementById('english-preview');
+                    if (enPreview && data.translated_html) {
+                        enPreview.innerHTML = data.translated_html;
+                        wrapWords(enPreview, 'editable-word');
+                    }
+                    // Re-init interactive previews
+                    alignment = null;
+                    initInteractivePreviews();
+                    // Auto-dismiss after 5s
+                    setTimeout(function() { msgEl.innerHTML = ''; }, 5000);
+                } else {
+                    msgEl.innerHTML = '<div class="alert alert-warning">' + data.message + '</div>';
+                    setTimeout(function() { msgEl.innerHTML = ''; }, 5000);
+                }
+            } catch (err) {
+                msgEl.innerHTML = '<div class="alert alert-danger">Error: ' + err.message + '</div>';
+            }
+        }
+
+        // ==========================================
         // Copy translation (plain text)
         // ==========================================
         function copyTranslation() {
@@ -544,6 +590,11 @@
                 }
                 // Initialize interactive previews
                 initInteractivePreviews();
+            }
+            // Auto-scroll to search results
+            if (e.target.id === 'search-results') {
+                var results = e.target.lastElementChild;
+                if (results) results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
             // Auto-dismiss success alerts after 5s
             e.target.querySelectorAll('.alert-success').forEach(function(a) {
