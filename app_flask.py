@@ -94,18 +94,24 @@ def translate_page():
 
     # Load logo as base64
     import base64
+    import json
     logo_b64 = ''
     logo_path = Path('assets/psp_logo.png')
     if logo_path.exists():
         logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
 
+    french_text = session.get('french_text', '')
+    translated_text = session.get('translated_text', '')
+
     return render_template('translator.html',
         glossary_count=len(glossary),
         glossary_stats=stats,
         logo_b64=logo_b64,
-        french_text=session.get('french_text', ''),
-        translated_text=session.get('translated_text', ''),
-        translated_html=markdown_to_html(session.get('translated_text', '')) if session.get('translated_text') else '',
+        french_text=french_text,
+        translated_text=translated_text,
+        french_html=markdown_to_html(french_text) if french_text else '',
+        translated_html=markdown_to_html(translated_text) if translated_text else '',
+        alignment_json=json.dumps(session.get('alignment')) if session.get('alignment') else 'null',
     )
 
 
