@@ -25,7 +25,7 @@ from tools import log_action, add_to_glossary, parse_word, export_word
 from tools import word_alignment
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(32).hex())
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'psp-translator-secret-key-2024')
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,6 +53,9 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         app_password = os.environ.get('APP_PASSWORD')
         if app_password and not session.get('authenticated'):
+            # HTMX requests: return error message instead of redirect to login page
+            if request.headers.get('HX-Request'):
+                return '<div class="alert alert-warning">Session expired. Please <a href="/" target="_top">log in again</a>.</div>', 401
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated
