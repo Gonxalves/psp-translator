@@ -4,179 +4,263 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PSP Translator</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #1f2937; font-size: 14px; }
+
+        /* Header */
+        .header { padding: 12px 24px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 20px; }
+        .header img { height: 50px; }
+        .header h1 { font-size: 1.6rem; color: #1f2937; font-weight: 600; }
+
+        /* Info bar */
+        .info-bar { padding: 8px 24px; background: #dbeafe; color: #1e40af; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .info-bar .icon { font-size: 16px; }
+
+        /* Main layout */
+        .main { padding: 20px 24px; }
+        .section-title { font-size: 1.1rem; font-weight: 600; color: #1f2937; margin-bottom: 12px; }
+        .divider { border: none; border-top: 1px solid #e5e7eb; margin: 20px 0; }
+
+        /* Two-column layout */
+        .row { display: flex; gap: 20px; }
+        .col { flex: 1; min-width: 0; }
+
+        /* Labels */
+        .label { font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+        .hint { font-size: 12px; color: #6b7280; font-style: italic; margin-top: 2px; margin-bottom: 8px; }
+
+        /* Upload section */
+        .upload-section { background: #f0f2f6; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+        .upload-section input[type="file"] { font-size: 13px; }
+        .upload-status { font-size: 12px; color: #6b7280; margin-top: 4px; }
+
+        /* Textarea */
+        textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; font-size: 14px; resize: vertical; font-family: inherit; }
+        textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
+
+        /* Translation output */
         .translation-output {
             font-family: 'Times New Roman', Times, serif;
             font-size: 12pt;
             line-height: 1.6;
             padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
+            background: #f8f9fa;
+            border-radius: 6px;
             border: 1px solid #dee2e6;
-            min-height: 200px;
+            min-height: 300px;
             white-space: pre-wrap;
+            overflow-y: auto;
+            max-height: 500px;
         }
         .translation-output strong { font-weight: bold; }
         .translation-output em { font-style: italic; }
         .translation-output mark { background-color: #FFFF00; padding: 0 2px; }
         .translation-output del { text-decoration: line-through; }
         .translation-output u { text-decoration: underline; }
+        .empty-output { color: #9ca3af; font-style: italic; font-family: inherit; font-size: 14px; }
+
+        /* Buttons */
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; color: #374151; font-size: 14px; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+        .btn:hover { background: #f3f4f6; }
+        .btn-primary { background: #ef4444; color: #fff; border-color: #ef4444; }
+        .btn-primary:hover { background: #dc2626; }
+        .btn-sm { padding: 5px 10px; font-size: 13px; }
+        .btn-outline { background: transparent; }
+        .btn-success { background: #10b981; color: #fff; border-color: #10b981; }
+        .btn-success:hover { background: #059669; }
+        .btn-full { width: 100%; justify-content: center; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Button row */
+        .btn-row { display: flex; gap: 8px; margin: 10px 0; }
+
+        /* Alerts */
+        .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; }
+        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .alert-warning { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .alert-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert-info { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+
+        /* Search section */
+        .search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .search-row input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+        .search-row input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
+
+        /* Search results */
+        .search-result-card { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+        .search-result-header { background: #f9fafb; padding: 10px 14px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e5e7eb; }
+        .search-result-body { padding: 12px 14px; }
+        .search-result-item { border-left: 3px solid #3b82f6; padding-left: 12px; margin-bottom: 12px; }
+        .search-result-item h4 { font-size: 14px; margin-bottom: 4px; }
+        .search-result-item p { font-size: 13px; color: #4b5563; margin-bottom: 4px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #e5e7eb; color: #374151; }
+        .link { color: #3b82f6; text-decoration: none; font-size: 13px; }
+        .link:hover { text-decoration: underline; }
+
+        /* Glossary add form */
+        .glossary-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .glossary-form input { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; flex: 1; min-width: 150px; }
+        .glossary-form input:focus { outline: none; border-color: #3b82f6; }
+
+        /* Sidebar stats (bottom) */
+        .stats-bar { background: #f9fafb; border-top: 1px solid #e5e7eb; padding: 10px 24px; font-size: 13px; color: #6b7280; display: flex; gap: 20px; }
+
+        /* Loading spinner */
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #d1d5db; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .htmx-indicator { display: none; }
         .htmx-request .htmx-indicator { display: inline-block; }
-        .htmx-request .htmx-hide-on-request { display: none; }
-        .spinner-border-sm { width: 1rem; height: 1rem; }
-        textarea { font-size: 14px; }
-        .search-result { border-left: 3px solid #0d6efd; padding-left: 12px; margin-bottom: 12px; }
-        .header-bar { background: #1f2937; color: white; padding: 12px 0; margin-bottom: 20px; }
-        .header-bar h1 { font-size: 1.5rem; margin: 0; }
-        .stats-badge { font-size: 0.85rem; }
+        .htmx-request .htmx-hide { display: none; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .row { flex-direction: column; }
+            .search-row { flex-direction: column; }
+            .glossary-form { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <div class="header-bar">
-        <div class="container">
-            <div class="d-flex align-items-center justify-content-between">
-                <h1>PSP Translator</h1>
-                <div>
-                    <span class="badge bg-info stats-badge me-2">Glossary: {{ glossary_count }} terms</span>
-                    <button class="btn btn-sm btn-outline-light"
-                            hx-post="/api/glossary/refresh"
-                            hx-target="#glossary-msg"
-                            hx-indicator="#refresh-spinner">
-                        <span class="htmx-hide-on-request">Refresh Glossary</span>
-                        <span class="spinner-border spinner-border-sm htmx-indicator" id="refresh-spinner"></span>
-                    </button>
-                </div>
-            </div>
-        </div>
+
+    <!-- Header with logo -->
+    <div class="header">
+        {% if logo_b64 %}
+        <img src="data:image/png;base64,{{ logo_b64 }}" alt="PSP Logo">
+        {% endif %}
+        <h1>PSP Translator</h1>
     </div>
 
-    <div class="container">
-        <div id="glossary-msg"></div>
+    <!-- Glossary info bar -->
+    <div class="info-bar" id="glossary-bar">
+        <span class="icon">&#128218;</span>
+        <span>Glossary: {{ glossary_count }} terms loaded</span>
+        <span style="margin-left: auto;">
+            <button class="btn btn-sm btn-outline"
+                    hx-post="/api/glossary/refresh"
+                    hx-target="#refresh-msg"
+                    hx-indicator="#refresh-spin">
+                <span class="htmx-hide">&#128260; Refresh Glossary</span>
+                <span class="spinner htmx-indicator" id="refresh-spin"></span>
+            </button>
+        </span>
+    </div>
+    <div id="refresh-msg" style="padding: 0 24px;"></div>
 
-        <!-- Translation Section -->
-        <div class="row mb-4">
-            <!-- French Input -->
-            <div class="col-md-6">
-                <h5>French Text</h5>
+    <div class="main">
 
-                <!-- File upload -->
-                <div class="mb-2">
-                    <input type="file" class="form-control form-control-sm" id="wordUpload" accept=".docx">
-                    <div id="upload-status" class="small text-muted mt-1"></div>
+        <!-- ========== TRANSLATION SECTION ========== -->
+        <div class="section-title">Translation</div>
+
+        <div class="row">
+            <!-- LEFT: French Input -->
+            <div class="col">
+                <div class="label">French Text</div>
+
+                <!-- Upload -->
+                <div class="upload-section">
+                    <input type="file" id="wordUpload" accept=".docx">
+                    <div class="upload-status" id="upload-status"></div>
                 </div>
 
                 <form id="translate-form"
                       hx-post="/api/translate"
                       hx-target="#translation-result"
-                      hx-indicator="#translate-spinner">
-                    <textarea class="form-control mb-2" name="french_text" id="french_text"
-                              rows="14" placeholder="Enter French text here or upload a Word document...">{{ french_text }}</textarea>
-                    <button type="submit" class="btn btn-primary w-100">
-                        <span class="htmx-hide-on-request">Translate</span>
-                        <span class="spinner-border spinner-border-sm htmx-indicator" id="translate-spinner"></span>
-                        <span class="htmx-indicator"> Translating...</span>
-                    </button>
+                      hx-indicator="#translate-spin">
+                    <textarea name="french_text" id="french_text" rows="14"
+                              placeholder="Entrez le texte francais ici ou uploadez un document Word...">{{ french_text }}</textarea>
+                    <div class="hint">Formatting: **bold**, *italic*, ++underline++, ~~strikethrough~~, ==highlight==</div>
+                    <div class="btn-row">
+                        <button type="submit" class="btn btn-primary btn-full">
+                            <span class="htmx-hide">&#128260; Translate</span>
+                            <span class="spinner htmx-indicator" id="translate-spin"></span>
+                            <span class="htmx-indicator"> Translating...</span>
+                        </button>
+                    </div>
                 </form>
             </div>
 
-            <!-- English Output -->
-            <div class="col-md-6">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h5 class="mb-0">English Translation</h5>
-                    {% if translated_text %}
-                    <div>
-                        <a href="/api/download" class="btn btn-sm btn-outline-secondary">Download Word</a>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="copyTranslation()">Copy Text</button>
+            <!-- RIGHT: English Output -->
+            <div class="col">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <div class="label" style="margin-bottom: 0;">English Translation</div>
+                    <div id="export-buttons">
+                        {% if translated_text %}
+                        <a href="/api/download" class="btn btn-sm btn-outline">&#128196; Download Word</a>
+                        <button class="btn btn-sm btn-outline" onclick="copyTranslation()">&#128203; Copy Text</button>
+                        {% endif %}
                     </div>
-                    {% endif %}
                 </div>
                 <div id="translation-result">
                     {% if translated_html %}
                     <div class="translation-output">{{ translated_html | safe }}</div>
                     {% else %}
-                    <div class="translation-output text-muted"><em>Your English translation will appear here after clicking Translate.</em></div>
+                    <div class="translation-output">
+                        <span class="empty-output">Your English translation will appear here after clicking Translate.</span>
+                    </div>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-        <hr>
+        <hr class="divider">
 
-        <!-- Terminology Checker -->
-        <h5>Terminology Checker</h5>
-        <p class="text-muted small">Look up alternative translations using TERMIUM Plus, OQLF, or Canada.ca databases</p>
+        <!-- ========== TERMINOLOGY CHECKER ========== -->
+        <div class="section-title">&#128269; Terminology Checker</div>
+        <div class="hint" style="margin-bottom: 10px;">Look up alternative translations using TERMIUM Plus, OQLF, or Canada.ca databases</div>
 
-        <div class="row mb-3">
-            <div class="col-md-5">
-                <input type="text" class="form-control" id="search-term" placeholder="Enter term to check...">
-            </div>
-            <div class="col-md-auto">
-                <button class="btn btn-outline-primary"
-                        hx-post="/api/search"
-                        hx-target="#search-results"
-                        hx-include="#search-term"
-                        hx-vals='{"tool":"termium"}'
-                        hx-indicator="#search-spinner">
-                    TERMIUM Plus
-                </button>
-            </div>
-            <div class="col-md-auto">
-                <button class="btn btn-outline-primary"
-                        hx-post="/api/search"
-                        hx-target="#search-results"
-                        hx-include="#search-term"
-                        hx-vals='{"tool":"oqlf"}'
-                        hx-indicator="#search-spinner">
-                    OQLF
-                </button>
-            </div>
-            <div class="col-md-auto">
-                <button class="btn btn-outline-primary"
-                        hx-post="/api/search"
-                        hx-target="#search-results"
-                        hx-include="#search-term"
-                        hx-vals='{"tool":"canada"}'
-                        hx-indicator="#search-spinner">
-                    Canada.ca
-                </button>
-            </div>
-            <div class="col-md-auto">
-                <button class="btn btn-outline-secondary" onclick="document.getElementById('search-results').innerHTML=''">
-                    Clear
-                </button>
-                <span class="spinner-border spinner-border-sm htmx-indicator" id="search-spinner"></span>
-            </div>
+        <div class="search-row">
+            <input type="text" id="search-term" name="term" placeholder="Enter term to check...">
+            <button class="btn btn-outline"
+                    hx-post="/api/search"
+                    hx-target="#search-results"
+                    hx-include="#search-term"
+                    hx-vals='{"tool":"termium"}'
+                    hx-indicator="#search-spin">
+                TERMIUM Plus
+            </button>
+            <button class="btn btn-outline"
+                    hx-post="/api/search"
+                    hx-target="#search-results"
+                    hx-include="#search-term"
+                    hx-vals='{"tool":"oqlf"}'
+                    hx-indicator="#search-spin">
+                OQLF
+            </button>
+            <button class="btn btn-outline"
+                    hx-post="/api/search"
+                    hx-target="#search-results"
+                    hx-include="#search-term"
+                    hx-vals='{"tool":"canada"}'
+                    hx-indicator="#search-spin">
+                Canada.ca
+            </button>
+            <button class="btn btn-outline" onclick="document.getElementById('search-results').innerHTML=''">Clear</button>
+            <span class="spinner htmx-indicator" id="search-spin"></span>
         </div>
 
-        <!-- Fix: HTMX needs name attribute for hx-include -->
-        <script>document.getElementById('search-term').setAttribute('name', 'term');</script>
+        <div id="search-results" style="margin-top: 12px;"></div>
 
-        <div id="search-results" class="mb-4"></div>
+        <hr class="divider">
 
-        <hr>
-
-        <!-- Add to Glossary -->
-        <h5>Add to Glossary</h5>
-        <form hx-post="/api/glossary/add" hx-target="#glossary-add-msg" class="row g-2 mb-4">
-            <div class="col-md-3">
-                <input type="text" class="form-control" name="french_term" placeholder="French term" required>
-            </div>
-            <div class="col-md-3">
-                <input type="text" class="form-control" name="english_term" placeholder="English term" required>
-            </div>
-            <div class="col-md-3">
-                <input type="text" class="form-control" name="notes" placeholder="Notes (optional)">
-            </div>
-            <div class="col-md-auto">
-                <button type="submit" class="btn btn-success">Add Term</button>
-            </div>
+        <!-- ========== ADD TO GLOSSARY ========== -->
+        <div class="section-title">Add to Glossary</div>
+        <form class="glossary-form" hx-post="/api/glossary/add" hx-target="#glossary-add-msg">
+            <input type="text" name="french_term" placeholder="French term" required>
+            <input type="text" name="english_term" placeholder="English term" required>
+            <input type="text" name="notes" placeholder="Notes (optional)">
+            <button type="submit" class="btn btn-success">Add Term</button>
         </form>
-        <div id="glossary-add-msg"></div>
+        <div id="glossary-add-msg" style="margin-top: 8px;"></div>
 
+    </div>
+
+    <!-- Bottom stats bar -->
+    <div class="stats-bar">
+        <span>&#128218; Glossary: {{ glossary_count }} terms</span>
+        <span>&#128279; <a href="https://www.btb.termiumplus.gc.ca/" target="_blank" class="link">TERMIUM Plus</a></span>
+        <span>&#128279; <a href="https://vitrinelinguistique.oqlf.gouv.qc.ca/" target="_blank" class="link">OQLF Vitrine</a></span>
     </div>
 
     <!-- Scripts -->
@@ -185,7 +269,6 @@
         document.getElementById('wordUpload').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
-
             const status = document.getElementById('upload-status');
             status.textContent = 'Extracting text...';
 
@@ -195,34 +278,30 @@
             try {
                 const resp = await fetch('/api/upload', { method: 'POST', body: formData });
                 const data = await resp.json();
-
-                if (data.error) {
-                    status.textContent = 'Error: ' + data.error;
-                    return;
-                }
-
+                if (data.error) { status.textContent = 'Error: ' + data.error; return; }
                 document.getElementById('french_text').value = data.text;
-                status.textContent = `Extracted from "${data.filename}" (${data.words} words, ${data.paragraphs} paragraphs)`;
+                status.textContent = 'Extracted from "' + data.filename + '" (' + data.words + ' words, ' + data.paragraphs + ' paragraphs)';
             } catch (err) {
                 status.textContent = 'Upload failed: ' + err.message;
             }
         });
 
-        // Copy translation to clipboard
+        // Copy translation
         function copyTranslation() {
             const el = document.querySelector('.translation-output');
             if (!el) return;
-            // Get plain text (strip HTML tags)
             const text = el.innerText || el.textContent;
             navigator.clipboard.writeText(text).then(() => {
-                alert('Copied to clipboard!');
+                const btn = event.target;
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = orig, 2000);
             });
         }
 
-        // Auto-dismiss alerts after 5 seconds
+        // Auto-dismiss success alerts
         document.body.addEventListener('htmx:afterSwap', function(e) {
-            const alerts = e.target.querySelectorAll('.alert-success');
-            alerts.forEach(a => setTimeout(() => a.remove(), 5000));
+            e.target.querySelectorAll('.alert-success').forEach(a => setTimeout(() => a.remove(), 5000));
         });
     </script>
 </body>

@@ -91,9 +91,17 @@ def translate_page():
         glossary = {}
         stats = {'term_count': 0}
 
+    # Load logo as base64
+    import base64
+    logo_b64 = ''
+    logo_path = Path('assets/psp_logo.png')
+    if logo_path.exists():
+        logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
+
     return render_template('translator.html',
         glossary_count=len(glossary),
         glossary_stats=stats,
+        logo_b64=logo_b64,
         french_text=session.get('french_text', ''),
         translated_text=session.get('translated_text', ''),
         translated_html=markdown_to_html(session.get('translated_text', '')) if session.get('translated_text') else '',

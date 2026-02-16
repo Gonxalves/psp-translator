@@ -1,9 +1,8 @@
-<div class="alert alert-success alert-dismissible fade show py-2" role="alert">
-    Translation complete! (Tokens: {{ input_tokens }} in / {{ output_tokens }} out, Cost: ${{ "%.4f"|format(cost) }})
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+<div class="alert alert-success">
+    &#9989; Translation complete! (Tokens: {{ input_tokens }} in / {{ output_tokens }} out, Cost: ${{ "%.4f"|format(cost) }})
 </div>
-<div class="mb-2">
-    <a href="/api/download" class="btn btn-sm btn-outline-secondary">Download Word</a>
-    <button class="btn btn-sm btn-outline-secondary" onclick="copyTranslation()">Copy Text</button>
+<div style="margin-bottom: 8px;">
+    <a href="/api/download" class="btn btn-sm btn-outline">&#128196; Download Word</a>
+    <button class="btn btn-sm btn-outline" onclick="copyTranslation()">&#128203; Copy Text</button>
 </div>
 <div class="translation-output">{{ html_output | safe }}</div>
