@@ -295,6 +295,36 @@ def api_translate():
         return f'<div class="alert alert-danger">Translation failed: {html_module.escape(str(e))}</div>'
 
 
+@app.route('/api/find-equivalent', methods=['POST'])
+@require_auth
+def api_find_equivalent():
+    """Find the English equivalent of a French term WITHOUT replacing it."""
+    french_term = request.form.get('french_term', '').strip()
+    if not french_term:
+        return jsonify({'success': False, 'message': 'Missing French term.'}), 400
+
+    translated_text = get_data('translated_text', '')
+    french_text = get_data('french_text', '')
+    alignment_data = get_data('alignment')
+
+    if not translated_text:
+        return jsonify({'success': False, 'message': 'No translation available yet.'})
+
+    old_english = find_english_equivalent(french_term, french_text, translated_text, alignment_data)
+    if not old_english:
+        return jsonify({'success': False, 'message': f"Could not find how '{french_term}' was translated."})
+
+    # Count occurrences
+    pattern = r'(?<!\w)' + re.escape(old_english) + r'(?!\w)'
+    count = len(re.findall(pattern, translated_text, re.IGNORECASE))
+
+    return jsonify({
+        'success': True,
+        'old_english': old_english,
+        'count': count,
+    })
+
+
 @app.route('/api/use-translation', methods=['POST'])
 @require_auth
 def api_use_translation():

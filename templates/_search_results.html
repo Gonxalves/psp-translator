@@ -1,39 +1,39 @@
 {% if results %}
-<div class="search-result-card">
-    <div class="search-result-header">
+<details open class="search-tool-group">
+    <summary class="search-tool-header">
         {{ tool_name }} &mdash; "{{ term }}" &mdash; {{ results|length }} result(s)
-    </div>
-    <div class="search-result-body">
+    </summary>
+    <div class="search-tool-body">
         {% for result in results %}
-        <details {% if loop.first %}open{% endif %}>
-            <summary class="result-summary">
+        <div class="search-result-item">
+            <div class="result-term-row">
                 <strong>{{ result.english_term }}</strong>
                 {% if result.get('domain') %}
                 <span class="badge">{{ result.domain }}</span>
                 {% endif %}
-            </summary>
-            <div class="result-details">
-                <p>{{ result.get('description', 'No description available') }}</p>
-                {% if result.get('source_url') %}
-                <a href="{{ result.source_url }}" target="_blank" class="link">View source</a>
-                {% endif %}
-                <div class="result-actions">
-                    <button class="btn btn-sm btn-primary" style="background:#3b82f6;border-color:#3b82f6;width:auto;"
-                            onclick="useThisTranslation('{{ term | e }}', '{{ result.english_term | e }}')">
-                        Use this translation
-                    </button>
-                    <form style="display:inline;" hx-post="/api/glossary/add" hx-target="#glossary-add-msg" hx-swap="innerHTML">
-                        <input type="hidden" name="french_term" value="{{ term }}">
-                        <input type="hidden" name="english_term" value="{{ result.english_term }}">
-                        <input type="hidden" name="notes" value="Added from {{ tool_name }}">
-                        <button type="submit" class="btn btn-sm btn-success">Add to Glossary</button>
-                    </form>
-                </div>
             </div>
-        </details>
+            {% if result.get('description') %}
+            <p class="result-desc">{{ result.description }}</p>
+            {% endif %}
+            {% if result.get('source_url') %}
+            <a href="{{ result.source_url }}" target="_blank" class="link">View source</a>
+            {% endif %}
+            <div class="result-actions">
+                <button class="btn btn-sm btn-primary" style="background:#3b82f6;border-color:#3b82f6;width:auto;"
+                        onclick="useThisTranslation('{{ term | e }}', '{{ result.english_term | e }}')">
+                    Use this translation
+                </button>
+                <form style="display:inline;" hx-post="/api/glossary/add" hx-target="#glossary-add-msg" hx-swap="innerHTML">
+                    <input type="hidden" name="french_term" value="{{ term }}">
+                    <input type="hidden" name="english_term" value="{{ result.english_term }}">
+                    <input type="hidden" name="notes" value="Added from {{ tool_name }}">
+                    <button type="submit" class="btn btn-sm btn-success">Add to Glossary</button>
+                </form>
+            </div>
+        </div>
         {% endfor %}
     </div>
-</div>
+</details>
 {% else %}
 <div class="alert alert-info">
     {{ tool_name }} &mdash; No results found for "{{ term }}"
