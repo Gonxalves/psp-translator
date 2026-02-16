@@ -53,9 +53,11 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         app_password = os.environ.get('APP_PASSWORD')
         if app_password and not session.get('authenticated'):
-            # HTMX requests: return error message instead of redirect to login page
-            if request.headers.get('HX-Request'):
-                return '<div class="alert alert-warning">Session expired. Please <a href="/" target="_top">log in again</a>.</div>', 401
+            # API endpoints: never redirect, return proper errors
+            if request.path.startswith('/api/'):
+                if request.headers.get('HX-Request'):
+                    return '<div class="alert alert-warning">Session expired. Please <a href="/" target="_top">log in again</a>.</div>', 401
+                return jsonify({'error': 'Session expired. Please refresh the page and log in again.'}), 401
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated
