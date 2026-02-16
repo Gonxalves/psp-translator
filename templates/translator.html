@@ -187,7 +187,8 @@
                     hx-post="/api/translate"
                     hx-target="#output-area"
                     hx-include="#french_text"
-                    hx-indicator="#translate-spin">
+                    hx-indicator="#translate-spin"
+                    hx-on::before-request="document.getElementById('translation-status').innerHTML='<div class=\'alert alert-info\'><span class=\'spinner\' style=\'vertical-align:middle;margin-right:8px;\'></span> Translating... please wait.</div>'">
                 <span class="htmx-hide">&#128260; Translate</span>
                 <span class="spinner htmx-indicator" id="translate-spin"></span>
                 <span class="htmx-indicator"> Translating...</span>
