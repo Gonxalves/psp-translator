@@ -23,9 +23,12 @@ jobs:
           docker push pspregistrycad.azurecr.io/psp-translator:latest
           docker push pspregistrycad.azurecr.io/psp-translator:${{ github.sha }}
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v2
+      - name: Login to Azure
+        uses: azure/login@v2
         with:
-          app-name: psp-translator-app
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: pspregistrycad.azurecr.io/psp-translator:latest
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Web App
+        run: |
+          az webapp config container set --resource-group rg-psp-translator --name psp-translator-app --container-image-name pspregistrycad.azurecr.io/psp-translator:latest
+          az webapp restart --resource-group rg-psp-translator --name psp-translator-app
