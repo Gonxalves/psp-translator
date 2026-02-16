@@ -1,0 +1,31 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: pspregistrycad.azurecr.io
+          username: pspregistrycad
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push Docker image
+        run: |
+          docker build -f Dockerfile.flask -t pspregistrycad.azurecr.io/psp-translator:latest -t pspregistrycad.azurecr.io/psp-translator:${{ github.sha }} .
+          docker push pspregistrycad.azurecr.io/psp-translator:latest
+          docker push pspregistrycad.azurecr.io/psp-translator:${{ github.sha }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: psp-translator-app
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          images: pspregistrycad.azurecr.io/psp-translator:latest
