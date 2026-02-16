@@ -496,6 +496,16 @@
             formData.append('file', file);
             try {
                 var resp = await fetch('/api/upload', { method: 'POST', body: formData });
+                // Handle auth redirect or non-JSON responses
+                var contentType = resp.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    if (resp.status === 401 || resp.redirected) {
+                        status.textContent = 'Session expired. Please refresh the page and log in again.';
+                    } else {
+                        status.textContent = 'Upload failed: server returned unexpected response (status ' + resp.status + ')';
+                    }
+                    return;
+                }
                 var data = await resp.json();
                 if (data.error) { status.textContent = 'Error: ' + data.error; return; }
                 document.getElementById('french_text').value = data.text;

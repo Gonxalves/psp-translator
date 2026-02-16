@@ -182,8 +182,10 @@ def api_translate():
 @require_auth
 def api_upload():
     file = request.files.get('file')
-    if not file or not file.filename.endswith('.docx'):
-        return '<div class="alert alert-warning">Please upload a .docx file.</div>'
+    if not file or not file.filename:
+        return jsonify({'error': 'No file uploaded.'}), 400
+    if not file.filename.lower().endswith('.docx'):
+        return jsonify({'error': 'Please upload a .docx file.'}), 400
 
     try:
         file_bytes = BytesIO(file.read())
