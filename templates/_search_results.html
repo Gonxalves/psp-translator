@@ -1,0 +1,33 @@
+{% if results %}
+<div class="card mb-3">
+    <div class="card-header">
+        <strong>{{ tool_name }}</strong> &mdash; "{{ term }}" &mdash; {{ results|length }} result(s)
+    </div>
+    <div class="card-body">
+        {% for result in results %}
+        <div class="search-result mb-3">
+            <h6 class="mb-1">{{ result.english_term }}</h6>
+            <p class="mb-1 small">{{ result.get('description', 'No description available') }}</p>
+            {% if result.get('domain') %}
+            <span class="badge bg-secondary">{{ result.domain }}</span>
+            {% endif %}
+            {% if result.get('source_url') %}
+            <a href="{{ result.source_url }}" target="_blank" class="small">View source</a>
+            {% endif %}
+
+            <!-- Add to glossary button -->
+            <form class="d-inline" hx-post="/api/glossary/add" hx-target="#glossary-add-msg" hx-swap="innerHTML">
+                <input type="hidden" name="french_term" value="{{ term }}">
+                <input type="hidden" name="english_term" value="{{ result.english_term }}">
+                <input type="hidden" name="notes" value="Added from {{ tool_name }}">
+                <button type="submit" class="btn btn-sm btn-outline-success ms-2">Add to Glossary</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <strong>{{ tool_name }}</strong> &mdash; No results found for "{{ term }}"
+</div>
+{% endif %}

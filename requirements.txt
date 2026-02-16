@@ -2,6 +2,10 @@
 python-dotenv>=1.0.0
 streamlit>=1.30.0
 
+# Flask (no-WebSocket alternative to Streamlit)
+flask>=3.0.0
+gunicorn>=22.0.0
+
 # AI API
 anthropic>=0.18.0
 
