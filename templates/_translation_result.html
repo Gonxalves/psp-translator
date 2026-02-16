@@ -1,8 +1,27 @@
+<!-- Hidden alignment data for JavaScript -->
+<script id="alignment-data" type="application/json">{{ alignment_json | safe }}</script>
+
 <div class="alert alert-success">
     &#9989; Translation complete! (Tokens: {{ input_tokens }} in / {{ output_tokens }} out, Cost: ${{ "%.4f"|format(cost) }})
 </div>
-<div style="margin-bottom: 8px;">
-    <a href="/api/download" class="btn btn-sm btn-outline">&#128196; Download Word</a>
-    <button class="btn btn-sm btn-outline" onclick="copyTranslation()">&#128203; Copy Text</button>
+<div class="alert alert-info" style="font-size:12px;">Click words in the French preview to look up terminology. Corresponding English words will be highlighted in green. Double-click an English word to edit it.</div>
+
+<div class="row">
+    <!-- French formatted preview -->
+    <div class="col">
+        <div class="label">Formatted Preview (click words to look up)</div>
+        <div class="preview-panel" id="french-preview">{{ french_html | safe }}</div>
+    </div>
+
+    <!-- English translation -->
+    <div class="col">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div class="label" style="margin-bottom:0;">English Translation</div>
+            <div>
+                <a href="/api/download" class="btn btn-sm btn-outline">&#128196; Download Word</a>
+                <button class="btn btn-sm btn-outline" onclick="copyTranslation()">&#128203; Copy</button>
+            </div>
+        </div>
+        <div class="translation-output" id="english-preview">{{ html_output | safe }}</div>
+    </div>
 </div>
-<div class="translation-output">{{ html_output | safe }}</div>

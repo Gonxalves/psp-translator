@@ -22,6 +22,7 @@ load_dotenv()
 # Import backend tools (unchanged from Streamlit version)
 from tools import translate_text, fetch_glossary, scrape_termium, scrape_oqlf, scrape_canada
 from tools import log_action, add_to_glossary, parse_word, export_word
+from tools import word_alignment
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(32).hex())
@@ -129,6 +130,21 @@ def api_translate():
         session['french_text'] = french_text
         session['translated_text'] = result['translated_text']
 
+        # Generate word alignment
+        alignment_data = None
+        try:
+            alignment = word_alignment.generate_alignment(french_text, result['translated_text'])
+            if alignment:
+                alignment_data = {
+                    'fr_words': alignment.get('fr_words', []),
+                    'en_words': alignment.get('en_words', []),
+                    'fr_to_en': {str(k): v for k, v in alignment.get('fr_to_en', {}).items()},
+                    'en_to_fr': {str(k): v for k, v in alignment.get('en_to_fr', {}).items()},
+                }
+                session['alignment'] = alignment_data
+        except Exception as e:
+            print(f"Warning: Word alignment failed: {e}")
+
         # Log translation
         try:
             log_action.log_translation(glossary_used=result.get('glossary_used', False))
@@ -136,13 +152,17 @@ def api_translate():
             pass
 
         html_output = markdown_to_html(result['translated_text'])
+        french_html = markdown_to_html(french_text)
 
+        import json
         return render_template('_translation_result.html',
             html_output=html_output,
+            french_html=french_html,
             raw_text=result['translated_text'],
             cost=result['cost'],
             input_tokens=result['input_tokens'],
             output_tokens=result['output_tokens'],
+            alignment_json=json.dumps(alignment_data) if alignment_data else 'null',
         )
 
     except Exception as e:
