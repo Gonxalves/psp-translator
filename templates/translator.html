@@ -128,6 +128,12 @@
         .replace-approval-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #FFF3CD; border: 1px solid #FFEEBA; border-radius: 8px; gap: 12px; flex-wrap: wrap; font-size: 14px; }
         .replace-approval-actions { display: flex; gap: 8px; }
 
+        /* Search status bars (blue=loading, green=done) */
+        .search-status-item { padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .status-loading { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .status-done { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .status-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
         /* Glossary form */
         .glossary-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .glossary-form input { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; flex: 1; min-width: 150px; }
@@ -276,12 +282,12 @@
 
         <div class="search-row">
             <input type="text" id="search-term" name="term" placeholder="Enter term to check...">
-            <button class="btn btn-outline" hx-post="/api/search" hx-target="#search-results" hx-swap="beforeend" hx-include="#search-term" hx-vals='{"tool":"termium"}' hx-indicator="#search-spin">TERMIUM Plus</button>
-            <button class="btn btn-outline" hx-post="/api/search" hx-target="#search-results" hx-swap="beforeend" hx-include="#search-term" hx-vals='{"tool":"oqlf"}' hx-indicator="#search-spin">OQLF</button>
-            <button class="btn btn-outline" hx-post="/api/search" hx-target="#search-results" hx-swap="beforeend" hx-include="#search-term" hx-vals='{"tool":"canada"}' hx-indicator="#search-spin">Canada.ca</button>
-            <button class="btn btn-outline" onclick="document.getElementById('search-results').innerHTML=''">Clear Results</button>
-            <span class="spinner htmx-indicator" id="search-spin"></span>
+            <button class="btn btn-outline" onclick="searchTool('termium', 'TERMIUM Plus')">TERMIUM Plus</button>
+            <button class="btn btn-outline" onclick="searchTool('oqlf', 'OQLF')">OQLF</button>
+            <button class="btn btn-outline" onclick="searchTool('canada', 'Canada.ca')">Canada.ca</button>
+            <button class="btn btn-outline" onclick="clearSearchResults()">Clear Results</button>
         </div>
+        <div id="search-status" style="margin-top: 8px;"></div>
         <div id="search-results" style="margin-top: 12px;"></div>
 
         <div id="glossary-add-msg" style="margin-top: 8px;"></div>
@@ -345,9 +351,62 @@
             var text = textarea.value;
             if (text.trim()) {
                 preview.innerHTML = markdownToHtml(text);
+                setupFrenchClickHandlers();
             } else {
                 preview.innerHTML = '<span class="empty-output">French preview will appear here.</span>';
             }
+        }
+
+        // ==========================================
+        // French word click handlers (works before AND after translation)
+        // ==========================================
+        function setupFrenchClickHandlers() {
+            var frPanel = document.getElementById('french-preview');
+            if (!frPanel || !frPanel.textContent.trim() || frPanel.querySelector('.empty-output')) return;
+
+            // Wrap words if not already wrapped
+            if (!frPanel.querySelector('.clickable-word')) {
+                wrapWords(frPanel, 'clickable-word');
+            }
+
+            var frWords = frPanel.querySelectorAll('.clickable-word');
+            frWords.forEach(function(span, idx) {
+                if (span.dataset.clickBound) return;
+                span.dataset.clickBound = '1';
+
+                span.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    var term = window.getSelection().toString().trim();
+                    if (!term) term = span.textContent.trim();
+                    term = term.replace(/^[^\w\u00C0-\u024F]+|[^\w\u00C0-\u024F]+$/g, '');
+                    if (!term) return;
+
+                    // Fill search input
+                    document.getElementById('search-term').value = term;
+
+                    // Context menu
+                    showContextMenu(e.clientX, e.clientY, term);
+
+                    // Highlight clicked French word
+                    frWords.forEach(function(w) { w.classList.remove('highlighted'); });
+                    span.classList.add('highlighted');
+
+                    // Highlight English words via alignment (if available)
+                    var enPanel = document.getElementById('english-preview');
+                    if (enPanel) {
+                        var enWords = enPanel.querySelectorAll('.editable-word');
+                        enWords.forEach(function(w) { w.classList.remove('en-highlighted'); });
+                        if (alignment && alignment.fr_to_en) {
+                            var enIndices = alignment.fr_to_en[String(idx)] || [];
+                            enIndices.forEach(function(ei) {
+                                if (enWords[ei]) enWords[ei].classList.add('en-highlighted');
+                            });
+                        }
+                    }
+                });
+            });
         }
 
         // ==========================================
@@ -397,48 +456,15 @@
             // Disable live preview - we now have interactive mode
             livePreviewActive = false;
 
-            // Wrap words if not already wrapped
-            if (!frPanel.querySelector('.clickable-word')) {
-                wrapWords(frPanel, 'clickable-word');
-            }
+            // Setup French click handlers (shared function)
+            setupFrenchClickHandlers();
+
+            // Wrap English words if not already wrapped
             if (!enPanel.querySelector('.editable-word')) {
                 wrapWords(enPanel, 'editable-word');
             }
 
-            var frWords = frPanel.querySelectorAll('.clickable-word');
             var enWords = enPanel.querySelectorAll('.editable-word');
-
-            // French word click: context menu + alignment highlight
-            frWords.forEach(function(span, idx) {
-                span.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    var term = window.getSelection().toString().trim();
-                    if (!term) term = span.textContent.trim();
-                    term = term.replace(/^[^\w\u00C0-\u024F]+|[^\w\u00C0-\u024F]+$/g, '');
-                    if (!term) return;
-
-                    // Fill search input
-                    document.getElementById('search-term').value = term;
-
-                    // Context menu
-                    showContextMenu(e.clientX, e.clientY, term);
-
-                    // Highlight clicked French word
-                    frWords.forEach(function(w) { w.classList.remove('highlighted'); });
-                    span.classList.add('highlighted');
-
-                    // Highlight English words via alignment
-                    enWords.forEach(function(w) { w.classList.remove('en-highlighted'); });
-                    if (alignment && alignment.fr_to_en) {
-                        var enIndices = alignment.fr_to_en[String(idx)] || [];
-                        enIndices.forEach(function(ei) {
-                            if (enWords[ei]) enWords[ei].classList.add('en-highlighted');
-                        });
-                    }
-                });
-            });
 
             // English word double-click to edit
             enWords.forEach(function(span) {
@@ -493,14 +519,74 @@
             document.getElementById('ctx-menu').style.display = 'none';
         });
 
+        var toolNames = { 'termium': 'TERMIUM Plus', 'oqlf': 'OQLF', 'canada': 'Canada.ca' };
+
         function searchFromMenu(tool) {
             document.getElementById('ctx-menu').style.display = 'none';
             if (!menuTerm) return;
-            htmx.ajax('POST', '/api/search', {
-                target: '#search-results',
-                swap: 'beforeend',
-                values: { term: menuTerm, tool: tool }
-            });
+            document.getElementById('search-term').value = menuTerm;
+            searchTool(tool, toolNames[tool] || tool);
+        }
+
+        // ==========================================
+        // Search tool with status bars (blue=loading, green=done)
+        // ==========================================
+        async function searchTool(tool, toolName) {
+            var term = document.getElementById('search-term').value.trim();
+            if (!term) {
+                document.getElementById('search-status').innerHTML = '<div class="alert alert-warning">Please enter a term to search.</div>';
+                setTimeout(function() { document.getElementById('search-status').innerHTML = ''; }, 3000);
+                return;
+            }
+
+            var statusEl = document.getElementById('search-status');
+            var statusId = 'status-' + tool + '-' + Date.now();
+
+            // Show blue loading bar
+            statusEl.insertAdjacentHTML('beforeend',
+                '<div class="search-status-item status-loading" id="' + statusId + '">' +
+                '<span class="spinner" style="width:14px;height:14px;"></span> ' +
+                'Searching ' + escapeHtml(toolName) + ' for "' + escapeHtml(term) + '"...</div>');
+
+            try {
+                var formData = new FormData();
+                formData.append('term', term);
+                formData.append('tool', tool);
+
+                var resp = await fetch('/api/search', { method: 'POST', body: formData });
+                var html = await resp.text();
+
+                // Append results
+                var resultsEl = document.getElementById('search-results');
+                resultsEl.insertAdjacentHTML('beforeend', html);
+
+                // Process HTMX elements in new content (for Add to Glossary buttons)
+                htmx.process(resultsEl.lastElementChild);
+
+                // Change status to green
+                var statusItem = document.getElementById(statusId);
+                if (statusItem) {
+                    statusItem.className = 'search-status-item status-done';
+                    statusItem.innerHTML = toolName + ' — "' + escapeHtml(term) + '" — done';
+                    setTimeout(function() { if (statusItem.parentNode) statusItem.remove(); }, 10000);
+                }
+
+                // Auto-scroll to results
+                var lastResult = resultsEl.lastElementChild;
+                if (lastResult) lastResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            } catch (err) {
+                var statusItem = document.getElementById(statusId);
+                if (statusItem) {
+                    statusItem.className = 'search-status-item status-error';
+                    statusItem.innerHTML = toolName + ' — Error: ' + escapeHtml(err.message);
+                }
+            }
+        }
+
+        function clearSearchResults() {
+            document.getElementById('search-results').innerHTML = '';
+            document.getElementById('search-status').innerHTML = '';
         }
 
         // ==========================================
@@ -720,11 +806,6 @@
                 // Initialize interactive previews
                 initInteractivePreviews();
             }
-            // Auto-scroll to search results
-            if (e.target.id === 'search-results') {
-                var results = e.target.lastElementChild;
-                if (results) results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
             // Auto-dismiss success alerts after 5s
             e.target.querySelectorAll('.alert-success').forEach(function(a) {
                 setTimeout(function() { a.remove(); }, 5000);
@@ -744,6 +825,8 @@
                 // No translation yet - enable live preview
                 livePreviewActive = true;
                 updateFrenchPreview();
+                // Setup French click handlers even before translation
+                setupFrenchClickHandlers();
             }
 
             // Live preview on textarea input
