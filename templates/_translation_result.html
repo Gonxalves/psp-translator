@@ -1,15 +1,11 @@
 <!-- OOB: Update translation status in the right column -->
 <div id="translation-status" hx-swap-oob="true">
     <div class="alert alert-success">
-        &#9989; Translation complete! (Tokens: {{ input_tokens }} in / {{ output_tokens }} out, Cost: ${{ "%.4f"|format(cost) }})
+        Translation complete! (Tokens: {{ input_tokens }} in / {{ output_tokens }} out, Cost: ${{ "%.4f"|format(cost) }})
     </div>
 </div>
 
 <!-- Main content (replaces #output-area) -->
-
-<!-- Hidden alignment data for JavaScript -->
-<script id="alignment-data" type="application/json">{{ alignment_json | safe }}</script>
-
 <div class="row">
     <!-- French formatted preview (clickable words) -->
     <div class="col">
@@ -21,9 +17,18 @@
     <div class="col">
         <div class="label">English Translation:</div>
         <div class="translation-output" id="english-preview">{{ html_output | safe }}</div>
+        <div id="undo-container"></div>
+        <div id="diff-container"></div>
+        <div id="changes-panel" class="changes-panel"></div>
         <div class="btn-row" style="margin-top:8px;">
             <button class="btn btn-sm btn-outline" onclick="copyTranslation()">&#128203; Copy Text</button>
             <a href="/api/download" class="btn btn-sm btn-outline">&#128196; Download Word</a>
         </div>
     </div>
 </div>
+
+<!-- Sidebar stats OOB swap -->
+{% if stats %}
+<div id="stat-translations" hx-swap-oob="innerHTML">{{ stats.translation_count }}</div>
+<div id="stat-cost" hx-swap-oob="innerHTML">${{ "%.4f"|format(stats.total_cost) }}</div>
+{% endif %}

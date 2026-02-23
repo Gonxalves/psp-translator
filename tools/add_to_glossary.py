@@ -93,17 +93,22 @@ def add(
             values=row_data
         )
 
-        # Upload updated file back to SharePoint (if configured)
-        from tools.sharepoint_client import is_sharepoint_enabled, upload_glossary
-        if is_sharepoint_enabled():
-            print("Syncing glossary back to SharePoint...")
-            upload_glossary(str(glossary_path))
-
         # Invalidate cache to force refresh
         invalidate_cache()
 
+        # Upload updated file back to SharePoint (if configured)
+        sync_msg = ""
+        from tools.sharepoint_client import is_sharepoint_enabled, upload_glossary
+        if is_sharepoint_enabled():
+            print("Syncing glossary back to SharePoint...")
+            sp_ok, sp_msg = upload_glossary(str(glossary_path))
+            if sp_ok:
+                sync_msg = " (synced to SharePoint)"
+            else:
+                sync_msg = f" (saved locally - {sp_msg})"
+
         print(f"[OK] Added to glossary: {french_term} -> {english_term}")
-        return True, f"Successfully added: {french_term} -> {english_term}"
+        return True, f"Added: {french_term} -> {english_term}{sync_msg}"
 
     except Exception as e:
         error_msg = f"Failed to add term to glossary: {e}"
@@ -175,13 +180,13 @@ def update(
 
         client.batch_update(glossary_path, GLOSSARY_SHEET_NAME, updates)
 
+        # Invalidate cache
+        invalidate_cache()
+
         # Upload updated file back to SharePoint (if configured)
         from tools.sharepoint_client import is_sharepoint_enabled, upload_glossary
         if is_sharepoint_enabled():
             upload_glossary(str(glossary_path))
-
-        # Invalidate cache
-        invalidate_cache()
 
         print(f"[OK] Updated glossary: {french_term} -> {new_english_term}")
         return True, f"Successfully updated: {french_term} -> {new_english_term}"

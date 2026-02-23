@@ -1,199 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PSP Translator</title>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #1f2937; font-size: 14px; }
+{% extends "base.html" %}
 
-        /* Header */
-        .header { padding: 12px 24px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 24px; }
-        .header img { height: 50px; }
-        .header h1 { font-size: 1.6rem; color: #1f2937; font-weight: 600; margin: 0; }
+{% block body %}
 
-        /* Info bar */
-        .info-bar { padding: 8px 24px; background: #dbeafe; color: #1e40af; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-
-        /* Main content */
-        .main { padding: 20px 24px; }
-        .section-title { font-size: 1.1rem; font-weight: 600; color: #1f2937; margin-bottom: 12px; }
-        .divider { border: none; border-top: 1px solid #e5e7eb; margin: 20px 0; }
-
-        /* Grid */
-        .row { display: flex; gap: 20px; }
-        .col { flex: 1; min-width: 0; }
-        .label { font-weight: 600; margin-bottom: 6px; font-size: 14px; }
-        .hint { font-size: 12px; color: #666; font-style: italic; margin-top: 2px; margin-bottom: 8px; }
-
-        /* Upload */
-        .upload-section { background: #f0f2f6; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
-        .upload-section input[type="file"] { font-size: 13px; }
-        .upload-status { font-size: 12px; color: #6b7280; margin-top: 4px; }
-
-        /* Textarea */
-        textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; font-size: 14px; resize: vertical; font-family: inherit; }
-        textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
-
-        /* Preview panels - Times New Roman 12pt like the Streamlit version */
-        .preview-panel, .translation-output {
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12pt;
-            line-height: 1.5;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-            border: 1px solid #dee2e6;
-            min-height: 200px;
-            max-height: 500px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-        .preview-panel strong, .translation-output strong { font-weight: bold; }
-        .preview-panel em, .translation-output em { font-style: italic; }
-        .preview-panel mark, .translation-output mark { background-color: #FFFF00; padding: 0 2px; }
-        .preview-panel del, .translation-output del { text-decoration: line-through; }
-        .preview-panel u, .translation-output u { text-decoration: underline; }
-
-        .empty-output { color: #888; font-style: italic; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; }
-
-        /* Clickable words in French preview */
-        .clickable-word { cursor: pointer; padding: 1px 2px; border-radius: 2px; transition: background 0.15s; }
-        .clickable-word:hover { background: #dbeafe; }
-        .clickable-word.highlighted { background: #bfdbfe; box-shadow: 0 0 0 1px #3b82f6; }
-
-        /* Highlighted English words via alignment */
-        .editable-word { cursor: text; padding: 1px 2px; border-radius: 2px; }
-        .editable-word:hover { background: #fef3c7; }
-        .editable-word.en-highlighted { background: #c8e6c9; box-shadow: 0 0 0 1px #4caf50; }
-
-        /* Context menu */
-        .ctx-menu { position: fixed; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 4px 0; z-index: 1000; min-width: 200px; display: none; }
-        .ctx-menu-item { padding: 8px 14px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-        .ctx-menu-item:hover { background: #f3f4f6; }
-        .ctx-menu-term { padding: 8px 14px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e5e7eb; color: #3b82f6; }
-
-        /* Buttons */
-        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; color: #374151; font-size: 14px; cursor: pointer; font-weight: 500; transition: all 0.15s; text-decoration: none; }
-        .btn:hover { background: #f3f4f6; }
-        .btn-primary { background: #ef4444; color: #fff; border-color: #ef4444; width: 100%; justify-content: center; }
-        .btn-primary:hover { background: #dc2626; }
-        .btn-sm { padding: 5px 10px; font-size: 13px; }
-        .btn-outline { background: transparent; }
-        .btn-success { background: #10b981; color: #fff; border-color: #10b981; }
-        .btn-success:hover { background: #059669; }
-        .btn-row { display: flex; gap: 8px; margin: 12px 0; align-items: center; }
-
-        /* Alerts */
-        .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; }
-        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-        .alert-warning { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-        .alert-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-        .alert-info { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
-
-        /* Search */
-        .search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .search-row input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
-        .search-row input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
-
-        /* Search results */
-        .search-result-card { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
-        .search-result-header { background: #f9fafb; padding: 10px 14px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e5e7eb; }
-        .search-result-body { padding: 8px 14px; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #e5e7eb; color: #374151; margin-left: 8px; }
-        .link { color: #3b82f6; text-decoration: none; font-size: 13px; }
-        .link:hover { text-decoration: underline; }
-
-        /* Collapsible tool group (one dropdown per tool) */
-        .search-tool-group { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
-        .search-tool-group[open] { border-color: #bfdbfe; }
-        .search-tool-header { padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 13px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; list-style: none; display: flex; align-items: center; gap: 8px; }
-        .search-tool-header::-webkit-details-marker { display: none; }
-        .search-tool-header::before { content: '\25BC'; font-size: 10px; color: #6b7280; transition: transform 0.2s; }
-        .search-tool-group:not([open]) .search-tool-header::before { transform: rotate(-90deg); }
-        .search-tool-header:hover { background: #f3f4f6; }
-        .search-tool-body { padding: 8px 14px; }
-        .search-result-item { padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
-        .search-result-item:last-child { border-bottom: none; }
-        .result-term-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .result-desc { font-size: 13px; color: #4b5563; margin-bottom: 6px; }
-        .result-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-
-        /* Replacement highlight & approval bar */
-        .highlight-pending { background-color: #FFF3CD !important; border-radius: 2px; transition: background-color 0.3s; }
-        .highlight-success { background-color: #D4EDDA !important; border-radius: 2px; transition: background-color 0.3s; animation: pulseGreen 1s ease-in-out 2; }
-        @keyframes pulseGreen { 0%,100% { background-color: #D4EDDA; } 50% { background-color: #A3D9A5; } }
-        .replace-approval-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #FFF3CD; border: 1px solid #FFEEBA; border-radius: 8px; gap: 12px; flex-wrap: wrap; font-size: 14px; }
-        .replace-approval-actions { display: flex; gap: 8px; }
-
-        /* Search status bars (blue=loading, green=done) */
-        .search-status-item { padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-        .status-loading { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
-        .status-done { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-        .status-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-
-        /* Glossary form */
-        .glossary-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .glossary-form input { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; flex: 1; min-width: 150px; }
-        .glossary-form input:focus { outline: none; border-color: #3b82f6; }
-
-        /* Footer */
-        .stats-bar { background: #f9fafb; border-top: 1px solid #e5e7eb; padding: 10px 24px; font-size: 13px; color: #6b7280; display: flex; gap: 20px; }
-
-        /* Spinner */
-        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #d1d5db; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .htmx-indicator { display: none; }
-        .htmx-request .htmx-indicator { display: inline-block; }
-        .htmx-request .htmx-hide { display: none; }
-
-        @media (max-width: 768px) {
-            .row { flex-direction: column; }
-            .search-row { flex-direction: column; }
-            .glossary-form { flex-direction: column; }
-        }
-    </style>
-</head>
-<body>
-
-    <!-- ================================================================ -->
-    <!-- HEADER (same as Streamlit: logo + title)                         -->
-    <!-- ================================================================ -->
+    <!-- HEADER -->
     <div class="header">
         {% if logo_b64 %}<img src="data:image/png;base64,{{ logo_b64 }}" alt="PSP">{% endif %}
         <h1>PSP Translator</h1>
     </div>
 
-    <!-- ================================================================ -->
-    <!-- GLOSSARY INFO BAR                                                -->
-    <!-- ================================================================ -->
+    <!-- SIDEBAR TOGGLE (fixed tab on right edge) -->
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Session info">&#9881; Info</button>
+
+    <!-- GLOSSARY INFO BAR -->
     <div class="info-bar">
         <span>&#128218; Glossary: {{ glossary_count }} terms loaded</span>
     </div>
 
     <div class="main">
 
-        <!-- ============================================================ -->
-        <!-- SECTION: Translation                                         -->
-        <!-- ============================================================ -->
+        <!-- SECTION: Translation -->
         <div class="section-title">Translation</div>
 
         <!-- ROW 1: French text input (left) + Translation status (right) -->
-        <!-- This matches Streamlit's left_col / right_col layout         -->
         <div class="row">
             <!-- LEFT COLUMN: French text input -->
             <div class="col">
                 <div class="label">French Text</div>
-
-                <!-- Word document upload -->
                 <div class="upload-section">
                     <input type="file" id="wordUpload" accept=".docx">
                     <div class="upload-status" id="upload-status"></div>
                 </div>
-
-                <!-- Textarea -->
                 <textarea name="french_text" id="french_text" rows="12"
                           placeholder="Entrez le texte francais ici ou uploadez un document Word...">{{ french_text }}</textarea>
                 <div class="hint">Formatting: **bold**, *italic*, ++underline++, ~~strikethrough~~, ==highlight==</div>
@@ -206,7 +42,7 @@
             </div>
         </div>
 
-        <!-- BUTTONS ROW (matches Streamlit's btn_col_a / btn_col_b) -->
+        <!-- BUTTONS ROW -->
         <div class="btn-row">
             <button class="btn btn-primary" style="width:auto;flex:1;max-width:300px;"
                     hx-post="/api/translate"
@@ -228,26 +64,27 @@
         </div>
         <div id="refresh-msg"></div>
 
-        <!-- ============================================================ -->
-        <!-- ROW 2: Preview panels (French left + English right)          -->
-        <!-- Matches Streamlit's preview_left / preview_right columns     -->
-        <!-- ============================================================ -->
+        <!-- ROW 2: Preview panels -->
         <div id="output-area">
             {% if translated_html %}
-            <!-- Alignment data for interactive features -->
-            <script id="alignment-data" type="application/json">{{ alignment_json | safe }}</script>
-
             <div class="row">
-                <!-- French formatted preview (clickable words) -->
                 <div class="col">
                     <div class="label">Formatted Preview: <span style="font-weight:normal;font-style:italic;">(click words to look up)</span></div>
                     <div class="preview-panel" id="french-preview">{{ french_html | safe }}</div>
                 </div>
-
-                <!-- English translation (editable words) -->
                 <div class="col">
                     <div class="label">English Translation:</div>
                     <div class="translation-output" id="english-preview">{{ translated_html | safe }}</div>
+                    <div id="undo-container">
+                        {% if undo_info and undo_info.has_undo %}
+                        <div class="undo-bar">
+                            <span class="undo-info">Last change: <strong>"{{ undo_info.old_term }}"</strong> &rarr; <strong>"{{ undo_info.new_term }}"</strong></span>
+                            <button class="btn btn-sm btn-outline" onclick="undoLastChange()">Undo</button>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div id="diff-container"></div>
+                    <div id="changes-panel" class="changes-panel"></div>
                     <div class="btn-row" style="margin-top:8px;">
                         <button class="btn btn-sm btn-outline" onclick="copyTranslation()">&#128203; Copy Text</button>
                         <a href="/api/download" class="btn btn-sm btn-outline">&#128196; Download Word</a>
@@ -267,6 +104,9 @@
                     <div class="translation-output" id="english-preview">
                         <span class="empty-output">Your English translation will appear here after clicking Translate.</span>
                     </div>
+                    <div id="undo-container"></div>
+                    <div id="diff-container"></div>
+                    <div id="changes-panel" class="changes-panel"></div>
                 </div>
             </div>
             {% endif %}
@@ -274,9 +114,7 @@
 
         <hr class="divider">
 
-        <!-- ============================================================ -->
-        <!-- SECTION: Terminology Checker                                 -->
-        <!-- ============================================================ -->
+        <!-- SECTION: Terminology Checker -->
         <div class="section-title">&#128269; Terminology Checker</div>
         <div class="hint" style="margin-bottom:10px;">Look up alternative translations using TERMIUM Plus, OQLF, or Canada.ca databases</div>
 
@@ -289,18 +127,17 @@
         </div>
         <div id="search-status" style="margin-top: 8px;"></div>
         <div id="search-results" style="margin-top: 12px;"></div>
-
         <div id="glossary-add-msg" style="margin-top: 8px;"></div>
     </div>
 
-    <!-- Footer -->
+    <!-- FOOTER -->
     <div class="stats-bar">
         <span>&#128218; Glossary: {{ glossary_count }} terms</span>
         <span>&#128279; <a href="https://www.btb.termiumplus.gc.ca/" target="_blank" class="link">TERMIUM Plus</a></span>
         <span>&#128279; <a href="https://vitrinelinguistique.oqlf.gouv.qc.ca/" target="_blank" class="link">OQLF Vitrine</a></span>
     </div>
 
-    <!-- Context menu (hidden) -->
+    <!-- CONTEXT MENU -->
     <div class="ctx-menu" id="ctx-menu">
         <div class="ctx-menu-term" id="ctx-menu-term"></div>
         <div class="ctx-menu-item" onclick="searchFromMenu('termium')">&#128269; TERMIUM Plus</div>
@@ -308,523 +145,50 @@
         <div class="ctx-menu-item" onclick="searchFromMenu('canada')">&#128269; Canada.ca</div>
     </div>
 
-    <!-- ================================================================ -->
-    <!-- JAVASCRIPT                                                       -->
-    <!-- ================================================================ -->
-    <script>
-        // ==========================================
-        // Alignment data
-        // ==========================================
-        var alignment = null;
-
-        // ==========================================
-        // Client-side markdown to HTML (mirrors Python markdown_to_html)
-        // Used for live French preview while typing
-        // ==========================================
-        function markdownToHtml(text) {
-            text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            text = text.replace(/==(#[A-Fa-f0-9]{6}):(.+?)==/g, '<mark style="background-color: $1">$2</mark>');
-            text = text.replace(/==(.+?)==/g, '<mark>$1</mark>');
-            text = text.replace(/::(#[A-Fa-f0-9]{6}):(.+?)::/g, '<span style="color: $1">$2</span>');
-            text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
-            text = text.replace(/\+\+(.+?)\+\+/g, '<u>$1</u>');
-            text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-            text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-            text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-            text = text.replace(/\n/g, '<br>');
-            return text;
-        }
-
-        // ==========================================
-        // Live French preview (updates as user types)
-        // Matches Streamlit behavior where preview updates on any change
-        // ==========================================
-        var livePreviewActive = true;
-        var previewTimeout = null;
-
-        function updateFrenchPreview() {
-            if (!livePreviewActive) return;
-            var textarea = document.getElementById('french_text');
-            var preview = document.getElementById('french-preview');
-            if (!textarea || !preview) return;
-
-            var text = textarea.value;
-            if (text.trim()) {
-                preview.innerHTML = markdownToHtml(text);
-                setupFrenchClickHandlers();
-            } else {
-                preview.innerHTML = '<span class="empty-output">French preview will appear here.</span>';
-            }
-        }
-
-        // ==========================================
-        // French word click handlers (works before AND after translation)
-        // ==========================================
-        function setupFrenchClickHandlers() {
-            var frPanel = document.getElementById('french-preview');
-            if (!frPanel || !frPanel.textContent.trim() || frPanel.querySelector('.empty-output')) return;
-
-            // Wrap words if not already wrapped
-            if (!frPanel.querySelector('.clickable-word')) {
-                wrapWords(frPanel, 'clickable-word');
-            }
-
-            var frWords = frPanel.querySelectorAll('.clickable-word');
-            frWords.forEach(function(span, idx) {
-                if (span.dataset.clickBound) return;
-                span.dataset.clickBound = '1';
-
-                span.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    var term = window.getSelection().toString().trim();
-                    if (!term) term = span.textContent.trim();
-                    term = term.replace(/^[^\w\u00C0-\u024F]+|[^\w\u00C0-\u024F]+$/g, '');
-                    if (!term) return;
-
-                    // Fill search input
-                    document.getElementById('search-term').value = term;
-
-                    // Context menu
-                    showContextMenu(e.clientX, e.clientY, term);
-
-                    // Highlight clicked French word
-                    frWords.forEach(function(w) { w.classList.remove('highlighted'); });
-                    span.classList.add('highlighted');
-                });
-            });
-        }
-
-        // ==========================================
-        // DOM-based word wrapping (preserves HTML formatting)
-        // ==========================================
-        function wrapWords(container, className) {
-            if (!container) return;
-
-            function processNode(node) {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    var text = node.textContent;
-                    if (!text.trim()) return;
-
-                    var parts = text.split(/(\s+)/);
-                    var fragment = document.createDocumentFragment();
-
-                    parts.forEach(function(part) {
-                        if (/^\s+$/.test(part)) {
-                            fragment.appendChild(document.createTextNode(part));
-                        } else if (part.length > 0) {
-                            var span = document.createElement('span');
-                            span.className = className;
-                            span.textContent = part;
-                            fragment.appendChild(span);
-                        }
-                    });
-
-                    node.parentNode.replaceChild(fragment, node);
-                } else if (node.nodeType === Node.ELEMENT_NODE) {
-                    var children = Array.from(node.childNodes);
-                    children.forEach(processNode);
-                }
-            }
-
-            processNode(container);
-        }
-
-        // ==========================================
-        // Initialize interactive previews (after translation)
-        // ==========================================
-        function initInteractivePreviews() {
-            var frPanel = document.getElementById('french-preview');
-            var enPanel = document.getElementById('english-preview');
-            if (!frPanel || !enPanel) return;
-            if (!frPanel.textContent.trim() || frPanel.querySelector('.empty-output')) return;
-
-            // Disable live preview - we now have interactive mode
-            livePreviewActive = false;
-
-            // Setup French click handlers (shared function)
-            setupFrenchClickHandlers();
-
-            // Wrap English words if not already wrapped
-            if (!enPanel.querySelector('.editable-word')) {
-                wrapWords(enPanel, 'editable-word');
-            }
-
-            var enWords = enPanel.querySelectorAll('.editable-word');
-
-            // English word double-click to edit
-            enWords.forEach(function(span) {
-                if (span.dataset.editBound) return;
-                span.dataset.editBound = '1';
-
-                span.addEventListener('dblclick', function handleDblClick(e) {
-                    e.preventDefault();
-                    var oldText = span.textContent;
-                    var input = document.createElement('input');
-                    input.type = 'text';
-                    input.value = oldText;
-                    input.style.cssText = 'font-family:Times New Roman;font-size:12pt;border:1px solid #3b82f6;border-radius:3px;padding:1px 4px;width:' + Math.max(60, oldText.length * 10) + 'px;';
-                    span.replaceWith(input);
-                    input.focus();
-                    input.select();
-
-                    function finishEdit() {
-                        var newText = input.value.trim() || oldText;
-                        var newSpan = document.createElement('span');
-                        newSpan.className = 'editable-word';
-                        newSpan.textContent = newText;
-                        newSpan.dataset.editBound = '1';
-                        if (newText !== oldText) newSpan.style.background = '#bbf7d0';
-                        input.replaceWith(newSpan);
-                        newSpan.addEventListener('dblclick', handleDblClick);
-                    }
-                    input.addEventListener('blur', finishEdit);
-                    input.addEventListener('keydown', function(ev) {
-                        if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
-                        if (ev.key === 'Escape') { input.value = oldText; input.blur(); }
-                    });
-                });
-            });
-        }
-
-        // ==========================================
-        // Context menu
-        // ==========================================
-        var menuTerm = '';
-
-        function showContextMenu(x, y, term) {
-            menuTerm = term;
-            var menu = document.getElementById('ctx-menu');
-            document.getElementById('ctx-menu-term').textContent = '"' + term + '"';
-            menu.style.left = x + 'px';
-            menu.style.top = y + 'px';
-            menu.style.display = 'block';
-        }
-
-        document.addEventListener('click', function() {
-            document.getElementById('ctx-menu').style.display = 'none';
-        });
-
-        var toolNames = { 'termium': 'TERMIUM Plus', 'oqlf': 'OQLF', 'canada': 'Canada.ca' };
-
-        function searchFromMenu(tool) {
-            document.getElementById('ctx-menu').style.display = 'none';
-            if (!menuTerm) return;
-            document.getElementById('search-term').value = menuTerm;
-            searchTool(tool, toolNames[tool] || tool);
-        }
-
-        // ==========================================
-        // Search tool with status bars (blue=loading, green=done)
-        // ==========================================
-        async function searchTool(tool, toolName) {
-            var term = document.getElementById('search-term').value.trim();
-            if (!term) {
-                document.getElementById('search-status').innerHTML = '<div class="alert alert-warning">Please enter a term to search.</div>';
-                setTimeout(function() { document.getElementById('search-status').innerHTML = ''; }, 3000);
-                return;
-            }
-
-            var statusEl = document.getElementById('search-status');
-            var statusId = 'status-' + tool + '-' + Date.now();
-
-            // Show blue loading bar
-            statusEl.insertAdjacentHTML('beforeend',
-                '<div class="search-status-item status-loading" id="' + statusId + '">' +
-                '<span class="spinner" style="width:14px;height:14px;"></span> ' +
-                'Searching ' + escapeHtml(toolName) + ' for "' + escapeHtml(term) + '"...</div>');
-
-            try {
-                var formData = new FormData();
-                formData.append('term', term);
-                formData.append('tool', tool);
-
-                var resp = await fetch('/api/search', { method: 'POST', body: formData });
-                var html = await resp.text();
-
-                // Append results
-                var resultsEl = document.getElementById('search-results');
-                resultsEl.insertAdjacentHTML('beforeend', html);
-
-                // Process HTMX elements in new content (for Add to Glossary buttons)
-                htmx.process(resultsEl.lastElementChild);
-
-                // Change status to green
-                var statusItem = document.getElementById(statusId);
-                if (statusItem) {
-                    statusItem.className = 'search-status-item status-done';
-                    statusItem.innerHTML = toolName + ' — "' + escapeHtml(term) + '" — done';
-                    setTimeout(function() { if (statusItem.parentNode) statusItem.remove(); }, 10000);
-                }
-
-                // Auto-scroll to results
-                var lastResult = resultsEl.lastElementChild;
-                if (lastResult) lastResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-            } catch (err) {
-                var statusItem = document.getElementById(statusId);
-                if (statusItem) {
-                    statusItem.className = 'search-status-item status-error';
-                    statusItem.innerHTML = toolName + ' — Error: ' + escapeHtml(err.message);
-                }
-            }
-        }
-
-        function clearSearchResults() {
-            document.getElementById('search-results').innerHTML = '';
-            document.getElementById('search-status').innerHTML = '';
-        }
-
-        // ==========================================
-        // File upload
-        // ==========================================
-        document.getElementById('wordUpload').addEventListener('change', async function(e) {
-            var file = e.target.files[0];
-            if (!file) return;
-            var status = document.getElementById('upload-status');
-            status.textContent = 'Extracting text...';
-            var formData = new FormData();
-            formData.append('file', file);
-            try {
-                var resp = await fetch('/api/upload', { method: 'POST', body: formData });
-                // Handle auth redirect or non-JSON responses
-                var contentType = resp.headers.get('content-type') || '';
-                if (!contentType.includes('application/json')) {
-                    if (resp.status === 401 || resp.redirected) {
-                        status.textContent = 'Session expired. Please refresh the page and log in again.';
-                    } else {
-                        status.textContent = 'Upload failed: server returned unexpected response (status ' + resp.status + ')';
-                    }
-                    return;
-                }
-                var data = await resp.json();
-                if (data.error) { status.textContent = 'Error: ' + data.error; return; }
-                document.getElementById('french_text').value = data.text;
-                status.textContent = 'Extracted from "' + data.filename + '" (' + data.words + ' words, ' + data.paragraphs + ' paragraphs)';
-                // Update live preview
-                livePreviewActive = true;
-                updateFrenchPreview();
-            } catch (err) { status.textContent = 'Upload failed: ' + err.message; }
-        });
-
-        // ==========================================
-        // Use this translation (two-step: find + highlight → approve/cancel)
-        // ==========================================
-        var pendingReplacement = null;
-
-        function escapeHtml(s) {
-            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-        }
-        function escapeRegex(s) {
-            return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        }
-
-        function highlightWordsInPreview(previewEl, term, className) {
-            var words = previewEl.querySelectorAll('.editable-word');
-            var termWords = term.toLowerCase().split(/\s+/);
-            if (termWords.length === 0) return;
-
-            for (var i = 0; i <= words.length - termWords.length; i++) {
-                var match = true;
-                for (var j = 0; j < termWords.length; j++) {
-                    // Strip punctuation for matching
-                    var wordText = words[i + j].textContent.toLowerCase().replace(/^[^\w\u00C0-\u024F]+|[^\w\u00C0-\u024F]+$/g, '');
-                    if (wordText !== termWords[j]) { match = false; break; }
-                }
-                if (match) {
-                    for (var j = 0; j < termWords.length; j++) {
-                        words[i + j].classList.add(className);
-                    }
-                }
-            }
-        }
-
-        function clearHighlights(className) {
-            var enPreview = document.getElementById('english-preview');
-            if (!enPreview) return;
-            enPreview.querySelectorAll('.' + className).forEach(function(el) {
-                el.classList.remove(className);
-            });
-        }
-
-        async function useThisTranslation(frenchTerm, newEnglish) {
-            var msgEl = document.getElementById('glossary-add-msg');
-            msgEl.innerHTML = '<div class="alert alert-info"><span class="spinner" style="vertical-align:middle;margin-right:8px;"></span> Finding "' + escapeHtml(frenchTerm) + '" in translation...</div>';
-
-            try {
-                // Step 1: Find the English equivalent (no replacement yet)
-                var formData = new FormData();
-                formData.append('french_term', frenchTerm);
-
-                var resp = await fetch('/api/find-equivalent', { method: 'POST', body: formData });
-                var data = await resp.json();
-
-                if (!data.success) {
-                    msgEl.innerHTML = '<div class="alert alert-warning">' + escapeHtml(data.message) + '</div>';
-                    setTimeout(function() { msgEl.innerHTML = ''; }, 5000);
-                    return;
-                }
-
-                var oldEnglish = data.old_english;
-                var count = data.count;
-                pendingReplacement = { frenchTerm: frenchTerm, newEnglish: newEnglish, oldEnglish: oldEnglish };
-
-                // Step 2: Scroll to English preview and highlight the old word in orange
-                var enPreview = document.getElementById('english-preview');
-                if (!enPreview) { msgEl.innerHTML = ''; return; }
-
-                // Ensure words are wrapped
-                if (!enPreview.querySelector('.editable-word')) {
-                    wrapWords(enPreview, 'editable-word');
-                }
-
-                highlightWordsInPreview(enPreview, oldEnglish, 'highlight-pending');
-
-                // Scroll to first highlighted word
-                var firstHL = enPreview.querySelector('.highlight-pending');
-                if (firstHL) {
-                    firstHL.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                } else {
-                    // Term not found in DOM words - scroll to preview panel
-                    enPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-
-                // Step 3: Show approval bar
-                var countText = count > 1 ? ' (' + count + ' occurrences)' : '';
-                msgEl.innerHTML = '<div class="replace-approval-bar">' +
-                    '<span>Replace <strong>"' + escapeHtml(oldEnglish) + '"</strong> with <strong>"' + escapeHtml(newEnglish) + '"</strong>' + countText + '</span>' +
-                    '<div class="replace-approval-actions">' +
-                    '<button class="btn btn-sm btn-success" onclick="approveReplacement()">Approve</button>' +
-                    '<button class="btn btn-sm btn-outline" onclick="cancelReplacement()">Cancel</button>' +
-                    '</div></div>';
-
-            } catch (err) {
-                msgEl.innerHTML = '<div class="alert alert-danger">Error: ' + escapeHtml(err.message) + '</div>';
-            }
-        }
-
-        async function approveReplacement() {
-            if (!pendingReplacement) return;
-            var r = pendingReplacement;
-            var msgEl = document.getElementById('glossary-add-msg');
-            msgEl.innerHTML = '<div class="alert alert-info"><span class="spinner" style="vertical-align:middle;margin-right:8px;"></span> Replacing...</div>';
-
-            clearHighlights('highlight-pending');
-
-            try {
-                var formData = new FormData();
-                formData.append('french_term', r.frenchTerm);
-                formData.append('new_english', r.newEnglish);
-
-                var resp = await fetch('/api/use-translation', { method: 'POST', body: formData });
-                var data = await resp.json();
-
-                if (data.success) {
-                    // Update English preview with new text
-                    var enPreview = document.getElementById('english-preview');
-                    if (enPreview && data.translated_html) {
-                        enPreview.innerHTML = data.translated_html;
-                        wrapWords(enPreview, 'editable-word');
-                    }
-
-                    // Highlight new term in green
-                    highlightWordsInPreview(enPreview, r.newEnglish, 'highlight-success');
-
-                    // Scroll to first green highlight
-                    var firstHL = enPreview.querySelector('.highlight-success');
-                    if (firstHL) {
-                        firstHL.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-
-                    msgEl.innerHTML = '<div class="alert alert-success">' + escapeHtml(data.message) + '</div>';
-
-                    // Re-init interactive previews
-                    alignment = null;
-                    initInteractivePreviews();
-
-                    // Remove green highlights and dismiss message after 5s
-                    setTimeout(function() {
-                        clearHighlights('highlight-success');
-                        msgEl.innerHTML = '';
-                    }, 5000);
-                } else {
-                    msgEl.innerHTML = '<div class="alert alert-warning">' + escapeHtml(data.message) + '</div>';
-                    setTimeout(function() { msgEl.innerHTML = ''; }, 5000);
-                }
-            } catch (err) {
-                msgEl.innerHTML = '<div class="alert alert-danger">Error: ' + escapeHtml(err.message) + '</div>';
-            }
-            pendingReplacement = null;
-        }
-
-        function cancelReplacement() {
-            clearHighlights('highlight-pending');
-            pendingReplacement = null;
-            document.getElementById('glossary-add-msg').innerHTML = '';
-        }
-
-        // ==========================================
-        // Copy translation (plain text)
-        // ==========================================
-        function copyTranslation() {
-            var el = document.getElementById('english-preview');
-            if (!el) return;
-            navigator.clipboard.writeText(el.innerText).then(function() {
-                var btn = event.target.closest('.btn');
-                if (btn) {
-                    var orig = btn.innerHTML;
-                    btn.textContent = 'Copied!';
-                    setTimeout(function() { btn.innerHTML = orig; }, 2000);
-                }
-            });
-        }
-
-        // ==========================================
-        // HTMX: After translation loads
-        // ==========================================
-        document.body.addEventListener('htmx:afterSwap', function(e) {
-            if (e.target.id === 'output-area') {
-                // Load alignment data
-                var alignEl = document.getElementById('alignment-data');
-                if (alignEl) {
-                    try { alignment = JSON.parse(alignEl.textContent); } catch(err) { alignment = null; }
-                }
-                // Initialize interactive previews
-                initInteractivePreviews();
-            }
-            // Auto-dismiss success alerts after 5s
-            e.target.querySelectorAll('.alert-success').forEach(function(a) {
-                setTimeout(function() { a.remove(); }, 5000);
-            });
-        });
-
-        // ==========================================
-        // On page load
-        // ==========================================
-        document.addEventListener('DOMContentLoaded', function() {
-            // Load alignment if present (page reload with session data)
-            var alignEl = document.getElementById('alignment-data');
-            if (alignEl) {
-                try { alignment = JSON.parse(alignEl.textContent); } catch(err) { alignment = null; }
-                initInteractivePreviews();
-            } else {
-                // No translation yet - enable live preview
-                livePreviewActive = true;
-                updateFrenchPreview();
-                // Setup French click handlers even before translation
-                setupFrenchClickHandlers();
-            }
-
-            // Live preview on textarea input
-            var textarea = document.getElementById('french_text');
-            if (textarea) {
-                textarea.addEventListener('input', function() {
-                    clearTimeout(previewTimeout);
-                    previewTimeout = setTimeout(updateFrenchPreview, 300);
-                });
-            }
-        });
-    </script>
-</body>
-</html>
+    <!-- SIDEBAR -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="sidebar">
+        <button class="sidebar-close" onclick="toggleSidebar()" title="Close">&times;</button>
+        <h2>About</h2>
+        <p>
+            <strong>PSP Translator</strong> helps translate French text to English following
+            specific rules and using an approved glossary.
+        </p>
+        <p>
+            Features:<br>
+            - Claude AI-powered translation<br>
+            - Word document upload support<br>
+            - Excel glossary integration (OneDrive)<br>
+            - TERMIUM Plus, OQLF &amp; Canada.ca terminology lookup<br>
+            - Translation rule enforcement
+        </p>
+        <hr class="divider">
+        <h2>Session Stats</h2>
+        <div id="sidebar-stats">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-translations">{{ stats.translation_count }}</div>
+                <div class="stat-label">Translations</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-cost">${{ "%.4f"|format(stats.total_cost) }}</div>
+                <div class="stat-label">Total Cost</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-glossary">{{ glossary_count }}</div>
+                <div class="stat-label">Glossary Terms</div>
+            </div>
+        </div>
+        <hr class="divider">
+        <h2>Quick Links</h2>
+        <p>
+            <a href="https://www.btb.termiumplus.gc.ca/" target="_blank" class="link">TERMIUM Plus</a><br>
+            <a href="https://vitrinelinguistique.oqlf.gouv.qc.ca/" target="_blank" class="link">OQLF Vitrine linguistique</a><br>
+            <a href="https://www.canada.ca/en/translation-bureau.html" target="_blank" class="link">Canada.ca</a>
+        </p>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/app.js?v=5"></script>
+{% endblock %}
