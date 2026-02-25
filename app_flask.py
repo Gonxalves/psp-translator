@@ -853,7 +853,7 @@ def api_upload():
         doc_info = parse_word.get_document_info(file_bytes)
 
         # Store server-side (not in cookie)
-        store_data(french_text=extracted_text)
+        store_data(french_text=extracted_text, uploaded_filename=file.filename)
 
         return jsonify({
             'text': extracted_text,
@@ -958,10 +958,18 @@ def api_download():
         english_text=translated_text,
     )
 
+    # Build download filename from original upload name
+    uploaded = get_data('uploaded_filename', '')
+    if uploaded and uploaded.lower().endswith('.docx'):
+        base_name = uploaded[:-5]  # strip .docx
+        download_name = f"{base_name}_translated.docx"
+    else:
+        download_name = 'translation.docx'
+
     return send_file(
         BytesIO(word_file) if isinstance(word_file, bytes) else word_file,
         as_attachment=True,
-        download_name='translation.docx',
+        download_name=download_name,
         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
 
