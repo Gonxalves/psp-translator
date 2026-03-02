@@ -63,12 +63,19 @@ def add(
     notes = notes.strip()
 
     try:
+        # Always download latest from SharePoint before modifying
+        # to avoid overwriting changes made by others on the web
+        from tools.sharepoint_client import is_sharepoint_enabled, download_glossary, upload_glossary
+        if is_sharepoint_enabled():
+            print("Downloading latest glossary from SharePoint before edit...")
+            download_glossary(str(glossary_path))
+
         # Ensure file exists
         ensure_glossary_exists()
 
         # Check for duplicates if requested
         if check_duplicates:
-            existing_glossary = fetch_glossary()
+            existing_glossary = fetch_glossary(force_refresh=True)
 
             if french_term in existing_glossary:
                 existing_translation = existing_glossary[french_term]
@@ -98,7 +105,6 @@ def add(
 
         # Upload updated file back to SharePoint (if configured)
         sync_msg = ""
-        from tools.sharepoint_client import is_sharepoint_enabled, upload_glossary
         if is_sharepoint_enabled():
             print("Syncing glossary back to SharePoint...")
             sp_ok, sp_msg = upload_glossary(str(glossary_path))
@@ -141,6 +147,12 @@ def update(
         raise e
 
     try:
+        # Always download latest from SharePoint before modifying
+        from tools.sharepoint_client import is_sharepoint_enabled, download_glossary, upload_glossary
+        if is_sharepoint_enabled():
+            print("Downloading latest glossary from SharePoint before update...")
+            download_glossary(str(glossary_path))
+
         # Ensure file exists
         ensure_glossary_exists()
 
@@ -184,7 +196,6 @@ def update(
         invalidate_cache()
 
         # Upload updated file back to SharePoint (if configured)
-        from tools.sharepoint_client import is_sharepoint_enabled, upload_glossary
         if is_sharepoint_enabled():
             upload_glossary(str(glossary_path))
 

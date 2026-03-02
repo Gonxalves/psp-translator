@@ -87,8 +87,13 @@ function wrapWords(container, className) {
 }
 
 // ==========================================
-// French word click handlers
+// French word click handlers (supports Ctrl+Click for multi-word selection)
 // ==========================================
+function cleanPunctuation(text) {
+    // Strip leading/trailing punctuation (keep accented chars, hyphens inside words)
+    return text.replace(/^[^\w\u00C0-\u024F]+|[^\w\u00C0-\u024F]+$/g, '');
+}
+
 function setupFrenchClickHandlers() {
     var frPanel = document.getElementById('french-preview');
     if (!frPanel || !frPanel.textContent.trim() || frPanel.querySelector('.empty-output')) return;
@@ -107,20 +112,33 @@ function setupFrenchClickHandlers() {
             e.preventDefault();
             e.stopPropagation();
 
-            var term = window.getSelection().toString().trim();
-            if (!term) term = span.textContent.trim();
-            term = term.replace(/^[^\w\u00C0-\u024F]+|[^\w\u00C0-\u024F]+$/g, '');
-            if (!term) return;
+            // Always use the span text, ignore browser selection
+            var word = cleanPunctuation(span.textContent.trim());
+            if (!word) return;
 
-            // Fill search input
-            document.getElementById('search-term').value = term;
+            var searchInput = document.getElementById('search-term');
 
-            // Context menu
-            showContextMenu(e.clientX, e.clientY, term);
+            if (e.ctrlKey || e.metaKey) {
+                // Ctrl+Click: add word to existing selection
+                span.classList.add('highlighted');
+                var existing = searchInput.value.trim();
+                if (existing) {
+                    searchInput.value = existing + ' ' + word;
+                } else {
+                    searchInput.value = word;
+                }
+            } else {
+                // Normal click: replace selection with single word
+                frWords.forEach(function(w) { w.classList.remove('highlighted'); });
+                span.classList.add('highlighted');
+                searchInput.value = word;
+            }
 
-            // Highlight clicked French word
-            frWords.forEach(function(w) { w.classList.remove('highlighted'); });
-            span.classList.add('highlighted');
+            // Clear any browser text selection caused by ctrl+click
+            window.getSelection().removeAllRanges();
+
+            // Show context menu with the full (possibly multi-word) term
+            showContextMenu(e.clientX, e.clientY, searchInput.value.trim());
         });
     });
 }
@@ -1248,6 +1266,15 @@ document.body.addEventListener('htmx:afterSwap', function(e) {
         // New translation: reset changes log
         changesLog = [];
         initInteractivePreviews();
+        // Generate word alignment in the background (non-blocking)
+        fetch('/api/alignment', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    console.log('[OK] Word alignment loaded');
+                }
+            })
+            .catch(function() {});
     }
     // Auto-dismiss success alerts after 5s
     e.target.querySelectorAll('.alert-success').forEach(function(a) {

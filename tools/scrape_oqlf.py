@@ -3,22 +3,21 @@ OQLF Web Scraper
 
 Scrapes terminology from Office québécois de la langue française (OQLF)
 Vitrine linguistique / Grand dictionnaire terminologique (GDT).
-Uses Selenium for JavaScript rendering.
+Uses requests + BeautifulSoup (no Selenium needed - results are in static HTML).
 """
 
-import os
-import time
 import re
 from typing import List, Dict, Optional
 from urllib.parse import quote_plus
 
+import requests
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+
+
+_SESSION = requests.Session()
+_SESSION.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+})
 
 
 def scrape(search_term: str) -> List[Dict[str, str]]:
@@ -37,43 +36,18 @@ def scrape(search_term: str) -> List[Dict[str, str]]:
     """
     print(f"Searching OQLF for: '{search_term}'")
 
-    # Configure Chrome options for headless browsing
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-    if os.environ.get("CHROME_BIN"):
-        chrome_options.binary_location = os.environ["CHROME_BIN"]
+    encoded_term = quote_plus(search_term)
+    search_url = (
+        f"https://vitrinelinguistique.oqlf.gouv.qc.ca/resultats-de-recherche"
+        f"?tx_solr%5Bq%5D={encoded_term}"
+        f"&tx_solr%5Bfilter%5D%5B0%5D=type_stringM%3Agdt"
+    )
 
-    driver = None
     try:
-        driver = webdriver.Chrome(options=chrome_options)
+        resp = _SESSION.get(search_url, timeout=15)
+        resp.raise_for_status()
 
-        # Search URL for GDT only (using the tx_solr query parameter)
-        encoded_term = quote_plus(search_term)
-        # Use tx_solr[q] for search query and filter for GDT only
-        search_url = f"https://vitrinelinguistique.oqlf.gouv.qc.ca/resultats-de-recherche?tx_solr%5Bq%5D={encoded_term}&tx_solr%5Bfilter%5D%5B0%5D=type_stringM%3Agdt"
-
-        print(f"Loading: {search_url}")
-        driver.get(search_url)
-
-        # Wait for page to load
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
-            time.sleep(3)  # Additional wait for dynamic content
-        except TimeoutException:
-            print("Warning: Timeout waiting for page load.")
-            time.sleep(2)
-
-        # Find GDT fiche links in search results
-        results = _find_and_parse_gdt_results(driver, search_term)
+        results = _find_and_parse_gdt_results(resp.text, search_term)
 
         if not results:
             print(f"No GDT results found for '{search_term}'")
@@ -96,12 +70,8 @@ def scrape(search_term: str) -> List[Dict[str, str]]:
             'source_url': get_manual_search_url(search_term)
         }]
 
-    finally:
-        if driver:
-            driver.quit()
 
-
-def _find_and_parse_gdt_results(driver, search_term: str) -> List[Dict[str, str]]:
+def _find_and_parse_gdt_results(html: str, search_term: str) -> List[Dict[str, str]]:
     """
     Find GDT results in search results page and extract data.
 
@@ -113,7 +83,6 @@ def _find_and_parse_gdt_results(driver, search_term: str) -> List[Dict[str, str]
     results = []
 
     try:
-        html = driver.page_source
         soup = BeautifulSoup(html, 'html.parser')
 
         # Find all result articles with GDT fiches
@@ -155,9 +124,9 @@ def _extract_from_search_result(article) -> Optional[Dict[str, str]]:
 
     # Get the data-title which contains "French FR • English EN"
     data_title = article.get('data-title', '')
-    if data_title and ' • ' in data_title:
+    if data_title and ' \u2022 ' in data_title:
         # Split by the bullet separator
-        parts = data_title.split(' • ')
+        parts = data_title.split(' \u2022 ')
         if len(parts) >= 2:
             # English part is usually "term EN"
             en_part = parts[1].strip()
@@ -223,89 +192,6 @@ def _extract_from_search_result(article) -> Optional[Dict[str, str]]:
     return None
 
 
-def _fetch_and_parse_gdt_fiche(driver, url: str) -> Optional[Dict[str, str]]:
-    """
-    Fetch and parse a single GDT fiche page.
-    """
-    try:
-        driver.get(url)
-        time.sleep(2)  # Wait for page to load
-
-        html = driver.page_source
-        soup = BeautifulSoup(html, 'html.parser')
-
-        return _extract_gdt_fiche_data(soup, url)
-
-    except Exception as e:
-        print(f"Warning: Failed to fetch fiche: {e}")
-        return None
-
-
-def _extract_gdt_fiche_data(soup, source_url: str) -> Optional[Dict[str, str]]:
-    """
-    Extract terminology data from a GDT fiche page.
-
-    Structure:
-    - French term in heading
-    - English translation under "anglais" section
-    - Definition under "Définition" section
-    - Domain in breadcrumb/header
-    """
-    translation = ""
-    definition = ""
-    usage_notes = ""
-
-    # Get the page text for pattern matching
-    page_text = soup.get_text(separator='\n')
-
-    # Find English translation
-    # Look for "anglais" section and extract the term
-    en_match = re.search(r'anglais[:\s]*\n+.*?Terme\s*:\s*\n*([^\n]+)', page_text, re.IGNORECASE)
-    if en_match:
-        translation = en_match.group(1).strip()
-        # Clean up: remove any markdown-style formatting
-        translation = re.sub(r'\*+', '', translation).strip()
-
-    # Alternative: look for English terms in specific HTML patterns
-    if not translation:
-        # Try finding spans or divs with English content
-        for elem in soup.find_all(['h3', 'h4', 'strong', 'b']):
-            text = elem.get_text(strip=True).lower()
-            if 'anglais' in text:
-                # Get the next sibling or parent's next content
-                next_elem = elem.find_next(['p', 'span', 'div'])
-                if next_elem:
-                    translation = next_elem.get_text(strip=True)
-                    translation = re.sub(r'\*+', '', translation).strip()
-                    break
-
-    # Find definition
-    def_match = re.search(r'D[ée]finition\s*:\s*\n*([^\n]+(?:\n[^\n]+)?)', page_text, re.IGNORECASE)
-    if def_match:
-        definition = def_match.group(1).strip()
-        # Limit length
-        if len(definition) > 500:
-            definition = definition[:500] + "..."
-
-    # Find usage notes
-    note_match = re.search(r'Note\s*:\s*\n*([^\n]+(?:\n[^\n]+)?)', page_text, re.IGNORECASE)
-    if note_match:
-        usage_notes = note_match.group(1).strip()
-        if len(usage_notes) > 300:
-            usage_notes = usage_notes[:300] + "..."
-
-    # If we found at least a definition, return the result
-    if definition or translation:
-        return {
-            'translation': translation or "[Voir la fiche]",
-            'definition': definition or "Voir la fiche pour la definition complete.",
-            'usage_notes': usage_notes,
-            'source_url': source_url
-        }
-
-    return None
-
-
 def get_manual_search_url(search_term: str) -> str:
     """
     Get the manual search URL for OQLF Vitrine Linguistique (GDT).
@@ -320,53 +206,16 @@ def get_manual_search_url(search_term: str) -> str:
     return f"https://vitrinelinguistique.oqlf.gouv.qc.ca/resultats-de-recherche?tx_solr%5Bq%5D={encoded_term}&tx_solr%5Bfilter%5D%5B0%5D=type_stringM%3Agdt"
 
 
-def debug_fetch_html(search_term: str) -> str:
-    """Fetch and return the raw HTML for debugging purposes."""
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-    if os.environ.get("CHROME_BIN"):
-        chrome_options.binary_location = os.environ["CHROME_BIN"]
-
-    driver = None
-    try:
-        driver = webdriver.Chrome(options=chrome_options)
-        encoded_term = quote_plus(search_term)
-        # Use GDT-only filter with correct query parameter
-        url = f"https://vitrinelinguistique.oqlf.gouv.qc.ca/resultats-de-recherche?tx_solr%5Bq%5D={encoded_term}&tx_solr%5Bfilter%5D%5B0%5D=type_stringM%3Agdt"
-        driver.get(url)
-        time.sleep(5)
-        return driver.page_source
-    finally:
-        if driver:
-            driver.quit()
-
-
 if __name__ == "__main__":
     import sys
-
-    # Check for debug mode
-    if len(sys.argv) > 1 and sys.argv[1] == "--debug":
-        term = sys.argv[2] if len(sys.argv) > 2 else "marketing"
-        print(f"Fetching HTML for: {term}")
-        html = debug_fetch_html(term)
-        # Save to file for analysis
-        with open(".tmp/oqlf_debug.html", "w", encoding="utf-8") as f:
-            f.write(html)
-        print(f"HTML saved to .tmp/oqlf_debug.html ({len(html)} chars)")
-        sys.exit(0)
 
     # Test the scraper
     print("Testing OQLF Scraper...")
     print("-" * 50)
 
     test_terms = ["marketing", "ordinateur"]
+    if len(sys.argv) > 1:
+        test_terms = [sys.argv[1]]
 
     for term in test_terms:
         print(f"\nSearching for: {term}")

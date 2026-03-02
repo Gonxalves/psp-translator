@@ -65,17 +65,14 @@ def scrape(search_term: str, language_pair: str = "fr-en") -> List[Dict[str, str
         print(f"Loading: {url}")
         driver.get(url)
 
-        # Wait for page to load - try multiple possible indicators
+        # Wait for results to load (or timeout quickly if no results)
         try:
-            # Wait for body content to be present
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            WebDriverWait(driver, 8).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "section.recordSet, .noResult, #resultrecs"))
             )
-            # Additional wait for dynamic content to render
-            time.sleep(3)
         except TimeoutException:
-            print("Warning: Timeout waiting for page load.")
-            time.sleep(2)
+            print("Warning: Timeout waiting for results.")
+            time.sleep(1)
 
         # Parse results
         results = _parse_results(driver)

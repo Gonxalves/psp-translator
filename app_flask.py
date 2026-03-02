@@ -278,6 +278,19 @@ def login_page():
     return render_template('login.html')
 
 
+_logo_b64_cache = None
+
+def _get_logo_b64():
+    global _logo_b64_cache
+    if _logo_b64_cache is None:
+        logo_path = Path('assets/psp_logo.png')
+        if logo_path.exists():
+            _logo_b64_cache = base64.b64encode(logo_path.read_bytes()).decode()
+        else:
+            _logo_b64_cache = ''
+    return _logo_b64_cache
+
+
 @app.route('/translate')
 @require_auth
 def translate_page():
@@ -289,11 +302,8 @@ def translate_page():
         glossary = {}
         stats = {'term_count': 0}
 
-    # Load logo as base64
-    logo_b64 = ''
-    logo_path = Path('assets/psp_logo.png')
-    if logo_path.exists():
-        logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
+    # Load logo as base64 (cached at module level)
+    logo_b64 = _get_logo_b64()
 
     french_text = get_data('french_text', '')
     translated_text = get_data('translated_text', '')
@@ -337,30 +347,19 @@ def api_translate():
             translated_text=result['translated_text'],
             undo_stack=[],
             replace_data=None,
+            alignment=None,
             translation_count=translation_count,
             total_cost=total_cost,
         )
 
-        # Generate word alignment
-        alignment_data = None
-        try:
-            alignment = word_alignment.generate_alignment(french_text, result['translated_text'])
-            if alignment:
-                alignment_data = {
-                    'fr_words': alignment.get('fr_words', []),
-                    'en_words': alignment.get('en_words', []),
-                    'fr_to_en': {str(k): v for k, v in alignment.get('fr_to_en', {}).items()},
-                    'en_to_fr': {str(k): v for k, v in alignment.get('en_to_fr', {}).items()},
-                }
-                store_data(alignment=alignment_data)
-        except Exception as e:
-            print(f"Warning: Word alignment failed: {e}")
-
-        # Log translation
+        # Log translation (lightweight, don't block)
         try:
             log_action.log_translation(glossary_used=result.get('glossary_used', False))
         except Exception:
             pass
+
+        # NOTE: Word alignment is now generated async via /api/alignment
+        # called by the frontend after the translation is displayed.
 
         html_output = markdown_to_html(result['translated_text'])
         french_html = markdown_to_html(french_text)
@@ -377,6 +376,33 @@ def api_translate():
 
     except Exception as e:
         return f'<div class="alert alert-danger">Translation failed: {html_module.escape(str(e))}</div>'
+
+
+@app.route('/api/alignment', methods=['POST'])
+@require_auth
+def api_alignment():
+    """Generate word alignment in the background (called after translation)."""
+    french_text = get_data('french_text', '')
+    translated_text = get_data('translated_text', '')
+
+    if not french_text or not translated_text:
+        return jsonify({'success': False})
+
+    try:
+        alignment = word_alignment.generate_alignment(french_text, translated_text)
+        if alignment:
+            alignment_data = {
+                'fr_words': alignment.get('fr_words', []),
+                'en_words': alignment.get('en_words', []),
+                'fr_to_en': {str(k): v for k, v in alignment.get('fr_to_en', {}).items()},
+                'en_to_fr': {str(k): v for k, v in alignment.get('en_to_fr', {}).items()},
+            }
+            store_data(alignment=alignment_data)
+            return jsonify({'success': True, 'alignment': alignment_data})
+    except Exception as e:
+        print(f"Warning: Word alignment failed: {e}")
+
+    return jsonify({'success': False})
 
 
 @app.route('/api/find-equivalent', methods=['POST'])

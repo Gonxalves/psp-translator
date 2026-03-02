@@ -58,11 +58,13 @@ def fetch_glossary(force_refresh: bool = False) -> Dict[str, str]:
     # Fetch fresh data from Excel file
     print("Fetching glossary from Excel file...")
     try:
-        # Download latest version from SharePoint (if configured)
-        from tools.sharepoint_client import is_sharepoint_enabled, download_glossary
-        if is_sharepoint_enabled():
-            print("Syncing glossary from SharePoint...")
-            download_glossary(str(glossary_path))
+        # Only download from SharePoint on explicit manual refresh
+        # (not on every cache expiry, to avoid blocking page loads)
+        if force_refresh:
+            from tools.sharepoint_client import is_sharepoint_enabled, download_glossary
+            if is_sharepoint_enabled():
+                print("Syncing glossary from SharePoint...")
+                download_glossary(str(glossary_path))
 
         # Ensure file exists (creates with headers if not)
         ensure_glossary_exists()
